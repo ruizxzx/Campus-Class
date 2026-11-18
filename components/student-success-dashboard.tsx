@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Activity, AlertTriangle, BookOpenCheck, CheckCircle2, Search, ShieldCheck } from "lucide-react";
+import { Activity, AlertTriangle, BookOpenCheck, CheckCircle2, Search, ShieldCheck, Download } from "lucide-react";
 import Link from "next/link";
 import type { StudentSignal } from "@/lib/student-success";
 
@@ -68,6 +68,20 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
     } catch (error) { toast.error(error instanceof Error ? error.message : "Update failed."); }
     finally { setSaving(false); }
   }
+  function exportSignals() {
+    // Only authorized staff receive this private roster from the server.
+    const escapeCell=(value:string|number)=>{
+      const raw=String(value);
+      const safe=/^[=+\\-@\\t\\r]/.test(raw)?"'"+raw:raw;
+      return '"' + safe.replaceAll('"','""') + '"';
+    };
+    const csv=[["Student","Attendance %","Submission %","Released quiz %","Support signal","Reasons"],
+      ...displayed.map((person)=>[person.name,person.attendancePercent??"—",person.submissionPercent??"—",
+        person.quizPercent??"—",person.level,person.reasons.join("; ")])].map((cells)=>cells.map(escapeCell).join(",")).join("\\r\\n");
+    const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+    const link=document.createElement("a");link.href=url;link.download="campusclass-student-success.csv";
+    document.body.appendChild(link);link.click();link.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
   const percent = (number: number | null) => number === null ? "—" : number + "%";
   return <div className="space-y-5">
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -88,6 +102,7 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
         <label className="relative min-w-[180px] flex-1"><Search size={15} className="absolute top-3.5 left-3 text-[var(--muted)]"/><input className="input-base !pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search students…" aria-label="Search students"/></label>
         <select className="input-base !w-auto" value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filter by signal">{[["all","All signals"],["needs_support","Needs support"],["watch","Watch"],["on_track","On track"],["insufficient_data","Collecting data"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
         <Link href="/attendance" className="btn-secondary">Attendance</Link>
+        <button type="button" className="btn-secondary" onClick={exportSignals}><Download size={15}/>Export filtered CSV</button>
       </div>
       <div className="mt-5 table-wrap"><table className="table-base min-w-[720px]">
         <thead><tr><th>Student</th><th>Attendance</th><th>Submissions</th><th>Released quiz avg.</th><th>Support signal</th><th>Action</th></tr></thead>
@@ -117,7 +132,9 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
       <div className="mt-3 flex flex-wrap gap-2"><button className="btn-primary" disabled={saving || note.trim().length < 3} onClick={saveIntervention}>Save follow-up</button><button className="btn-secondary" onClick={() => setSelectedId("")}>Cancel</button></div>
     </section>}
     <section className="surface p-5 sm:p-6">
-      <h2 className="text-sm font-semibold">Faculty follow-ups</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">Faculty follow-ups</h2>
+        <p className="text-xs text-[var(--muted)]">{interventions.filter((item)=>item.status!=="resolved").length} active · {interventions.filter((item)=>item.status!=="resolved"&&item.follow_up_at&&Date.parse(item.follow_up_at)<Date.now()).length} overdue</p>
+      </div>
       <div className="mt-4 space-y-3">{interventions.length === 0 && <p className="text-xs text-[var(--muted)]">No support plans have been recorded yet.</p>}
       {interventions.map((item) => <div key={item.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[var(--line)] p-3">
         <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{students.find((person) => person.id === item.student_id)?.name ?? "Student"} · {item.reason.replaceAll("_"," ")}</p>
