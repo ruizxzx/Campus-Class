@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CalendarPlus, Download, Trash2, UploadCloud } from "lucide-react";
+import { CalendarPlus, Download, Trash2, UploadCloud, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { AISummarizeButton } from "@/components/ai-summarize-button";
 import { AIResourceAssistant } from "@/components/ai-resource-assistant";
@@ -21,6 +21,8 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
   const [outline, setOutline] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [indexingId, setIndexingId] = useState<string | null>(null);
+  const [useOcr, setUseOcr] = useState(false);
 
   async function upload(event: React.FormEvent) {
     event.preventDefault();
@@ -56,6 +58,24 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
     }
   }
 
+  async function indexPdf(id:string){
+    setIndexingId(id);
+    try{
+      const response=await fetch("/api/ai/index-syllabus",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({syllabus_id:id,use_ocr:useOcr}),
+      });
+      const data=await response.json() as {
+        error?:string;indexed_chunks?:number;page_numbers_verified?:boolean;
+      };
+      if(!response.ok)throw new Error(data.error??"Unable to index this PDF.");
+      toast.success("PDF text indexed into "+data.indexed_chunks+" searchable passages."
+        +(data.page_numbers_verified?" Page citations are available.":" Page numbers were not present in the parsed content."));
+    }catch(error){
+      toast.error(error instanceof Error?error.message:"Could not index this syllabus.");
+    }finally{setIndexingId(null);}
+  }
+
   async function remove(id: string) {
     const response = await fetch("/api/syllabi", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     const result = await response.json();
@@ -77,7 +97,15 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
       <button className="btn-primary w-full" disabled={saving || !classId || !title.trim() || !file}>{saving ? "Uploading…" : "Upload syllabus"}<UploadCloud size={14}/></button>
     </form> : null}
     <section className="surface min-w-0 p-4 sm:p-5">
-      <div className="mb-4 text-sm font-semibold">Published syllabi</div>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div><h2 className="text-sm font-semibold">Published syllabi</h2>
+          {canManage&&<p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Index a syllabus PDF to enable grounded Copilot text search. The college OpenRouter provider processes the document, and extracted text is held privately in Supabase.</p>}
+        </div>
+        {canManage&&<label className="flex items-start gap-2 text-[11px] text-[var(--muted)]">
+          <input type="checkbox" checked={useOcr} onChange={(event)=>setUseOcr(event.target.checked)} className="mt-1"/>
+          <span>Use paid OCR for scanned PDFs</span>
+        </label>}
+      </div>
       {syllabi.length ? <div className="space-y-3">{syllabi.map((syllabus) => {
         const classroom = classes.find((item) => item.id === syllabus.class_id);
         return <article key={syllabus.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--line)] p-4">
@@ -86,7 +114,10 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
             <div className="text-xs font-semibold">{syllabus.title}</div>
             <div className="mt-1 text-[10px] text-[var(--muted)]">{classroom?.display_name ?? "Class"} · Section {classroom?.section ?? "—"} · {Math.max(1, Math.round(syllabus.file_size / 1024))} KB</div>
             {syllabus.outline_text ? <p className="mt-2 line-clamp-2 text-[10px] leading-5 text-[var(--muted)]">{syllabus.outline_text}</p> : null}
-            {syllabus.outline_text ? <div className="mt-3 flex flex-wrap gap-2"><AISummarizeButton resourceType="syllabus" resourceId={syllabus.id}/><AIResourceAssistant resourceType="syllabus" resourceId={syllabus.id} compact /></div> : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {syllabus.outline_text&&<AISummarizeButton resourceType="syllabus" resourceId={syllabus.id}/>}
+              <AIResourceAssistant resourceType="syllabus" resourceId={syllabus.id} compact />
+            </div>
           </div>
           <button type="button" className="btn-secondary !px-3 !py-2 text-[10px]" onClick={async () => {
             const supabase = createClient();
@@ -94,6 +125,10 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
             if (error || !data?.signedUrl) toast.error("Could not open this syllabus.");
             else window.open(data.signedUrl, "_blank", "noopener,noreferrer");
           }}><Download size={13}/>Open PDF</button>
+          {canManage&&<button type="button" className="btn-secondary !px-3 !py-2 text-[10px]"
+            disabled={indexingId!==null} onClick={()=>void indexPdf(syllabus.id)}>
+              <Sparkles size={13}/>{indexingId===syllabus.id?"Indexing PDF…":"Index / re-index PDF"}
+            </button>}
           {canManage ? <button type="button" className="btn-secondary !px-3 !py-2 text-[10px] text-[var(--danger)]" onClick={() => void remove(syllabus.id)}><Trash2 size={13}/>Delete</button> : null}
         </article>;
       })}</div> : <p className="text-xs text-[var(--muted)]">No syllabi have been published.</p>}
