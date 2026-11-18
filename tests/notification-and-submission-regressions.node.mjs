@@ -34,3 +34,12 @@ test("student submission edit checks enrollment, deadline, and latest version", 
   assert.match(api, /assignment\.allow_late/);
   assert.match(api, /\.gt\("version", submission\.version\)/);
 });
+
+test("assignment publication happens only after reference files are recorded", () => {
+  const ui = read("components/academic-workflows.tsx");
+  const draft = ui.indexOf('status:"draft",published_at:null');
+  const metadata = ui.indexOf('.from("assignment_attachments").insert(');
+  const published = ui.indexOf('.update({status:"published",published_at:');
+  assert.ok(draft >= 0 && metadata > draft && published > metadata);
+  assert.match(ui, /if\(!publicationCommitted\)/);
+});
