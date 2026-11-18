@@ -1,0 +1,108 @@
+"use client";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Activity, AlertTriangle, BookOpenCheck, CheckCircle2, Search, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import type { StudentSignal } from "@/lib/student-success";
+
+type Student = StudentSignal & { id: string; name: string; email: string };
+type Intervention = { id: string; student_id: string; reason: string; note: string; status: string; created_at: string };
+export function StudentSuccessDashboard({ classId, classes, students, interventions }: {
+  classId: string; classes: { id: string; name: string }[]; students: Student[]; interventions: Intervention[];
+}) {
+  const router = useRouter();
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+  const [reason, setReason] = useState("support");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const displayed = useMemo(() => students.filter((person) => (filter === "all" || person.level === filter)
+    && (person.name + " " + person.email).toLowerCase().includes(search.toLowerCase())), [students,filter,search]);
+  const counts = {
+    needs_support: students.filter((person) => person.level === "needs_support").length,
+    watch: students.filter((person) => person.level === "watch").length,
+    on_track: students.filter((person) => person.level === "on_track").length,
+  };
+  async function saveIntervention() {
+    if (!selectedId || note.trim().length < 3) return;
+    setSaving(true);
+    try {
+      const response = await fetch("/api/success/interventions", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", class_id: classId, student_id: selectedId, reason, note }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? "Unable to save intervention.");
+      setSelectedId(""); setNote("");
+      toast.success("Faculty follow-up recorded.");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save follow-up.");
+    } finally { setSaving(false); }
+  }
+  async function resolve(id: string) {
+    setSaving(true);
+    try {
+      const response = await fetch("/api/success/interventions", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resolve", id }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? "Could not resolve follow-up.");
+      toast.success("Follow-up resolved."); router.refresh();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Update failed."); }
+    finally { setSaving(false); }
+  }
+  const percent = (number: number | null) => number === null ? "—" : number + "%";
+  return <div className="space-y-5">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {[{ label: "Learners", value: students.length, icon: BookOpenCheck },
+        { label: "Need support", value: counts.needs_support, icon: AlertTriangle },
+        { label: "Watchlist", value: counts.watch, icon: Activity },
+        { label: "On track", value: counts.on_track, icon: CheckCircle2 }].map((item) => {
+          const Icon = item.icon;
+          return <div key={item.label} className="surface p-5"><div className="flex items-center justify-between text-xs text-[var(--muted)]">{item.label}<Icon size={18}/></div><p className="mt-3 text-3xl font-bold tabular-nums">{item.value}</p></div>;
+        })}
+    </div>
+    <section className="surface p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-base font-semibold">Academic support signals</h2><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Transparent rules: attendance below 75% (3+ sessions), 2+ overdue items, released quiz average below 50% (2+ results).</p></div>
+        <select className="input-base !w-auto max-w-full" value={classId} onChange={(event) => router.push("/success?class_id=" + encodeURIComponent(event.target.value))}>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+      </div>
+      <div className="mt-5 flex flex-wrap gap-3">
+        <label className="relative min-w-[180px] flex-1"><Search size={15} className="absolute top-3.5 left-3 text-[var(--muted)]"/><input className="input-base !pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search students…" aria-label="Search students"/></label>
+        <select className="input-base !w-auto" value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filter by signal">{[["all","All signals"],["needs_support","Needs support"],["watch","Watch"],["on_track","On track"],["insufficient_data","Collecting data"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
+        <Link href="/attendance" className="btn-secondary">Attendance</Link>
+      </div>
+      <div className="mt-5 table-wrap"><table className="table-base min-w-[720px]">
+        <thead><tr><th>Student</th><th>Attendance</th><th>Submissions</th><th>Released quiz avg.</th><th>Support signal</th><th>Action</th></tr></thead>
+        <tbody>{displayed.map((person) => <tr key={person.id}>
+          <td><div className="font-semibold">{person.name}</div><div className="text-xs text-[var(--muted)]">{person.email}</div></td>
+          <td>{percent(person.attendancePercent)}</td><td>{percent(person.submissionPercent)}</td><td>{percent(person.quizPercent)}</td>
+          <td><span className={"status-pill " + (person.level === "on_track" ? "green" : person.level === "watch" || person.level === "needs_support" ? "orange" : "")}>{person.level.replaceAll("_"," ")}</span>{person.reasons.length > 0 && <div className="mt-2 max-w-56 text-xs text-[var(--muted)]">{person.reasons.join(" · ")}</div>}</td>
+          <td><button type="button" className="btn-secondary !px-3 !py-2" onClick={() => setSelectedId(person.id)}>Plan follow-up</button></td>
+        </tr>)}</tbody>
+      </table>{!displayed.length && <div className="py-8 text-center text-sm text-[var(--muted)]">No learners match your filters.</div>}</div>
+    </section>
+    {selectedId && <section className="surface p-5 sm:p-6">
+      <h2 className="text-sm font-semibold">Record a faculty intervention</h2><p className="mt-1 text-xs text-[var(--muted)]">Private to authorized staff. Do not include sensitive diagnoses.</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr]">
+        <input disabled className="input-base" value={students.find((person) => person.id === selectedId)?.name ?? "Student"} aria-label="Selected student"/>
+        <select className="input-base" value={reason} onChange={(event) => setReason(event.target.value)} aria-label="Reason">{["support","attendance","missing_work","low_scores","other"].map((item) => <option key={item} value={item}>{item.replaceAll("_"," ")}</option>)}</select>
+      </div>
+      <textarea className="input-base mt-3 min-h-24" maxLength={3000} placeholder="Support plan and next action…" value={note} onChange={(event) => setNote(event.target.value)}/>
+      <div className="mt-3 flex flex-wrap gap-2"><button className="btn-primary" disabled={saving || note.trim().length < 3} onClick={saveIntervention}>Save follow-up</button><button className="btn-secondary" onClick={() => setSelectedId("")}>Cancel</button></div>
+    </section>}
+    <section className="surface p-5 sm:p-6">
+      <h2 className="text-sm font-semibold">Faculty follow-ups</h2>
+      <div className="mt-4 space-y-3">{interventions.length === 0 && <p className="text-xs text-[var(--muted)]">No support plans have been recorded yet.</p>}
+      {interventions.map((item) => <div key={item.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[var(--line)] p-3">
+        <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{students.find((person) => person.id === item.student_id)?.name ?? "Student"} · {item.reason.replaceAll("_"," ")}</p><p className="mt-2 whitespace-pre-wrap text-xs leading-6">{item.note}</p><p className="mt-1 text-[10px] text-[var(--muted)]">{new Date(item.created_at).toLocaleString()}</p></div>
+        <div className="flex items-center gap-2"><span className="status-pill">{item.status}</span>{item.status !== "resolved" && <button type="button" disabled={saving} className="btn-secondary !p-2" onClick={() => resolve(item.id)}>Resolve</button>}</div>
+      </div>)}</div>
+    </section>
+    <p className="flex items-start gap-2 text-xs leading-5 text-[var(--muted)]"><ShieldCheck size={17} className="shrink-0"/>Signals are descriptive and depend on available records. They must never be used as an automated decision about student eligibility, discipline, or grading.</p>
+  </div>;
+}
