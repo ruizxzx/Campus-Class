@@ -51,9 +51,9 @@ This project uses an **incremental, forward-only SQL migration chain** in `supab
 - `202611180033`: reusable, staff-only question bank.
 - `202611180034`: per-class grading weights.
 - `202611180035`: configurable college Student Success rules.
-- `202611180036`: atomic course creation/edit, non-destructive publication, staff authorization and revision conflict guard.
+- `202611180036`: atomic course creation/edit, non-destructive publication, staff authorization and revision conflict guard.\n- `202611180037`: private student Copilot chat history with idempotent retries and clear history.
 
-Full filenames and ordered rollout details: **[deployment guide](docs/CAMPUSCLASS_2_0_COMPLETION.md)**. Run SQL checks in `supabase/tests/` on a **disposable** database seeded with at least two fictional colleges; do not seed production accounts with test data.
+Full filenames and ordered rollout details: **[deployment guide](docs/CAMPUSCLASS_2_0_COMPLETION.md)**. Run structural SQL checks in `supabase/tests/` on a **disposable** database seeded with at least two fictional colleges; do not seed production accounts with test data.
 
 ### Repair the "college AI encryption key is not set" issue
 

@@ -172,14 +172,16 @@ or browser E2E suite; a passing GitHub build is not production acceptance.
 
 See [completion and deployment guide](CAMPUSCLASS_2_0_COMPLETION.md) for the
 forward migrations 032 (Supabase Vault), 033 (reusable question bank),
-034 (class Gradebook policies) and 035 (college Student Success rules),
+034 (class Gradebook policies), 035 (college Student Success rules),
+036 (atomic course authoring) and 037 (private Copilot history),
 the administrator re-key process for old AI settings, on-demand PDF assistance,
 Student Success exports and Gradebook/Outcomes corrections.
 
 ## Work not yet complete or live-verified
 
 - On-demand PDF attachment is supported for a selected, accessible syllabus,
-  but durable extraction, embeddings and vector retrieval are not implemented.
+  but durable full-page PDF extraction, embeddings and vector retrieval are
+  not implemented.
 - A basic reusable staff question bank exists; advanced bulk authoring,
   negative marking, secure proctoring and high-stakes certification do not.
 - No trained predictive model: transparent support rules are used instead.
@@ -193,3 +195,19 @@ Student Success exports and Gradebook/Outcomes corrections.
 
 Do not represent this as bug-free or fully production-certified before completing
 the staged acceptance checks. No SQL was applied live by the assistant.
+
+## Completion hardening extension (SQL 036–037)
+
+- Replaced non-atomic browser-side course creation with transactional,
+  role-scoped server RPC. Added publication/archiving, safe lesson edits,
+  curriculum preview and optimistic concurrency protections for faculty.
+- Added persisted private student Copilot history, replay-safe request IDs,
+  clear history, and explicit save-failure warnings without dropping AI answers.
+- Improved Student Success with eight-week observed attendance/quiz trends,
+  excused attendance denominator, pre-enrollment fairness, and paged history.
+- Added real Vitest unit tests, Playwright desktop/mobile public smoke,
+  optional authenticated staging role checks, and pnpm lockfile-aligned
+  Vercel installs. Test outcomes must be inspected for the final commit.
+
+See [completion guide](CAMPUSCLASS_2_0_COMPLETION.md),
+[architecture](ARCHITECTURE.md) and [staging QA plan](TESTING.md).

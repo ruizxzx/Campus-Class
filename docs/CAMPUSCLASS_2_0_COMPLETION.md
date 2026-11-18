@@ -24,7 +24,9 @@ the Supabase-managed root encryption key. Vercel's environment variable
 3. Run [032: college AI Vault](../supabase/migrations/202611180032_college_ai_vault.sql),
    [033: question bank](../supabase/migrations/202611180033_question_bank.sql),
    [034: configurable Gradebook weighting](../supabase/migrations/202611180034_class_gradebook_policies.sql),
-   and [035: Student Success support rules](../supabase/migrations/202611180035_student_success_rules.sql)
+   and [035: Student Success support rules](../supabase/migrations/202611180035_student_success_rules.sql),
+   [036: atomic course editing](../supabase/migrations/202611180036_atomic_course_curriculum.sql)
+   and [037: private Copilot history](../supabase/migrations/202611180037_ai_study_history.sql)
    using the SQL Editor **in that order**. None is run by ChatGPT.
 4. Deploy the corresponding GitHub build.
 5. Sign in as college administrator → **Admin → AI settings**. Enter the
@@ -57,7 +59,8 @@ from public.college_ai_settings;
 select table_name from information_schema.tables
 where table_schema='public'
   and table_name in ('question_bank_items','ai_request_usage',
-    'class_gradebook_policies','student_success_rules');
+    'class_gradebook_policies','student_success_rules',
+    'ai_study_exchanges');
 ```
 
 These checks reveal no plaintext API secrets. Do not query
@@ -89,8 +92,15 @@ These checks reveal no plaintext API secrets. Do not query
   released quiz marks contribute; faculty can edit targets, view linked
   evidence and unlink mappings, export/print reports and inspect gaps.
   Subject/class permissions are re-checked.
-- **Learning Studio:** drag-and-drop chapter and lecture ordering with\n  accessible move-up/move-down button alternatives.\n- **Regression coverage:** GitHub pipeline executes Node tests,
-  TypeScript, lint and Next.js production build.
+- **Learning Studio:** drag-and-drop chapter and lecture ordering with\n  accessible move-up/move-down button alternatives.\n- **Course management:** module/lesson publication, preview, archive,
+  editing and reordering; writes are atomic (SQL 036) and existing student
+  progress remains attached to its lesson IDs. Stale editors receive 409.
+- **Copilot history:** students may restore or clear their own server-saved
+  question/answer exchanges (SQL 037). The client displays a warning if
+  generation succeeds but persistence fails, without discarding the answer.
+- **Browser and unit tests:** the GitHub pipeline executes Node regressions,
+  Vitest units, TypeScript, lint, Next.js production build and desktop/mobile
+  Chromium public smoke; real authenticated roles require staging credentials.
 
 ## Required production checks before declaring release ready
 
@@ -115,7 +125,6 @@ These checks reveal no plaintext API secrets. Do not query
 - Verified predictive-model training is not present; Student Success rules
   are transparent heuristic signals.
 - Secure/high-stakes exam proctoring and negative marking are not implemented.
-- Authoring is keyboard-reorderable but does not yet support drag/drop.
 - Entire-app Bengali/Hindi translations and user content translation are
   incomplete; basic navigation UI is multilingual.
 - Secure offline PDF caching and multi-device offline notes sync are not
@@ -124,3 +133,15 @@ These checks reveal no plaintext API secrets. Do not query
 
 Passing CI certifies the checked code paths only; it is not a guarantee of
 zero bugs or full production certification.
+
+## Additional verification for SQL 036–037
+
+Run `supabase/tests/campusclass_20_completion.test.sql` and existing pgTAP
+suites on disposable staging after all migrations. This contains 26 structural
+checks for Vault, question-bank, grading and support tables, restricted course
+RPC, and private Copilot history. It does not replace runtime permission tests.
+Run the exact GitHub pipeline in `.github/workflows/ci.yml` and then use a
+staging site to exercise `/faculty/courses`, `/faculty/courses/[id]/edit`,
+Copilot history reload/clear, and multi-college denial. More details:
+[Architecture](ARCHITECTURE.md), [API security](SECURITY_AND_API.md),
+[Testing](TESTING.md) and [demo script](DEMO_WALKTHROUGH.md).
