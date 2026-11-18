@@ -35,7 +35,9 @@ export function OutcomeDashboard({classes,classId,subjectId,outcomes,assessments
   function exportOutcomes(){
     const escaped=(value:string|number)=>{
       const raw=String(value);
-      const safe=/^[=+@\\-\\t\\r]/.test(raw)?"'"+raw:raw;
+      const unsafe = ["=","+","-","@"].some((prefix)=>raw.startsWith(prefix))
+        || raw.charCodeAt(0)===9 || raw.charCodeAt(0)===13;
+      const safe=unsafe?"'"+raw:raw;
       return '"'+safe.replaceAll('"','""')+'"';
     };
     const cells=[
