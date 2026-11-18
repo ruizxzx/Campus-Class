@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, BookOpen, ClipboardCheck, FileUp, Megaphone, Plus, RadioTower, Trash2, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, ClipboardCheck, FileUp, Megaphone, Plus, RadioTower, Trash2, Users, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { QuizAuthoringForm } from "@/components/quiz-authoring-form";
@@ -90,6 +90,35 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
       const lessons = chapter.lessons.slice();
       [lessons[index], lessons[to]] = [lessons[to], lessons[index]];
       return { ...chapter, lessons };
+    }));
+  }
+
+  // Pointer users may drag chapter/lecture handles; the existing arrow
+  // controls remain a keyboard-accessible alternative and work on touch.
+  function reorderChapters(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    setChapters((current) => {
+      const from=current.findIndex((chapter)=>chapter.id===sourceId);
+      const to=current.findIndex((chapter)=>chapter.id===targetId);
+      if(from<0||to<0)return current;
+      const next=current.slice();
+      const [moving]=next.splice(from,1);
+      next.splice(to,0,moving);
+      return next;
+    });
+  }
+
+  function reorderLectures(chapterId: string, sourceId: string, targetId: string) {
+    if(sourceId===targetId)return;
+    setChapters((current)=>current.map((chapter)=>{
+      if(chapter.id!==chapterId)return chapter;
+      const from=chapter.lessons.findIndex((lesson)=>lesson.id===sourceId);
+      const to=chapter.lessons.findIndex((lesson)=>lesson.id===targetId);
+      if(from<0||to<0)return chapter;
+      const lessons=chapter.lessons.slice();
+      const [moving]=lessons.splice(from,1);
+      lessons.splice(to,0,moving);
+      return {...chapter,lessons};
     }));
   }
 
@@ -295,10 +324,21 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
             </label>
             <div className="space-y-4">
               {chapters.map((chapter, chapterIndex) => (
-                <section key={chapter.id} className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4">
+                <section key={chapter.id} className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4"
+                  onDragOver={(event)=>{if(event.dataTransfer.types.includes("text/plain"))event.preventDefault();}}
+                  onDrop={(event)=>{
+                    const value=event.dataTransfer.getData("text/plain");
+                    if(!value.startsWith("campus-chapter:"))return;
+                    event.preventDefault();
+                    reorderChapters(value.slice("campus-chapter:".length),chapter.id);
+                  }}>
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-xs font-semibold"><span className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--surface)] text-[var(--green-strong)]">{chapterIndex + 1}</span>Chapter {chapterIndex + 1}</div>
                     <div className="flex flex-wrap items-center gap-1">
+                      <span draggable title="Drag chapter to reorder" role="img" aria-label={"Drag chapter " + (chapterIndex + 1)}
+                        className="cursor-grab rounded-lg p-2 text-[var(--muted)]"
+                        onDragStart={(event)=>{event.dataTransfer.setData("text/plain","campus-chapter:"+chapter.id);event.dataTransfer.effectAllowed="move";}}
+                        ><GripVertical size={16}/></span>
                       <button type="button" className="btn-secondary !p-2" disabled={chapterIndex === 0} onClick={() => moveChapter(chapterIndex, -1)} aria-label={"Move chapter " + (chapterIndex + 1) + " up"}><ArrowUp size={14}/></button>
                       <button type="button" className="btn-secondary !p-2" disabled={chapterIndex === chapters.length - 1} onClick={() => moveChapter(chapterIndex, 1)} aria-label={"Move chapter " + (chapterIndex + 1) + " down"}><ArrowDown size={14}/></button>
                       {chapters.length > 1 && <button type="button" className="btn-secondary !px-2.5 !py-2 text-[10px]" onClick={() => setChapters((current) => current.filter((item) => item.id !== chapter.id))}><Trash2 size={13}/>Remove</button>}
@@ -309,10 +349,22 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
                   </label>
                   <div className="mt-4 space-y-3">
                     {chapter.lessons.map((lesson, lessonIndex) => (
-                      <div key={lesson.id} className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4">
+                      <div key={lesson.id} className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4"
+                        onDragOver={(event)=>{if(event.dataTransfer.types.includes("text/plain"))event.preventDefault();}}
+                        onDrop={(event)=>{
+                          const value=event.dataTransfer.getData("text/plain");
+                          const prefix="campus-lecture:"+chapter.id+":";
+                          if(!value.startsWith(prefix))return;
+                          event.preventDefault();event.stopPropagation();
+                          reorderLectures(chapter.id,value.slice(prefix.length),lesson.id);
+                        }}>
                         <div className="mb-3 flex items-center justify-between gap-3">
                           <div className="text-[11px] font-semibold">Lecture {lessonIndex + 1}</div>
                           <div className="flex items-center gap-1">
+                            <span draggable title="Drag lecture to reorder" role="img" aria-label={"Drag lecture " + (lessonIndex + 1)}
+                              className="cursor-grab rounded-lg p-2 text-[var(--muted)]"
+                              onDragStart={(event)=>{event.dataTransfer.setData("text/plain","campus-lecture:"+chapter.id+":"+lesson.id);event.dataTransfer.effectAllowed="move";}}
+                            ><GripVertical size={16}/></span>
                             <button type="button" disabled={lessonIndex === 0} className="btn-secondary !p-2" aria-label={"Move lecture " + (lessonIndex + 1) + " up"} onClick={() => moveLecture(chapter.id, lessonIndex, -1)}><ArrowUp size={14}/></button>
                             <button type="button" disabled={lessonIndex === chapter.lessons.length - 1} className="btn-secondary !p-2" aria-label={"Move lecture " + (lessonIndex + 1) + " down"} onClick={() => moveLecture(chapter.id, lessonIndex, 1)}><ArrowDown size={14}/></button>
                             {chapter.lessons.length > 1 && <button type="button" className="btn-secondary !p-2" aria-label="Remove lecture" onClick={() => setChapters((current) => current.map((item) => item.id === chapter.id ? { ...item, lessons: item.lessons.filter((entry) => entry.id !== lesson.id) } : item))}><Trash2 size={14}/></button>}
