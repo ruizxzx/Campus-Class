@@ -79,7 +79,7 @@ Prior permission fixes if missing:
 
 **Additional forward-only patches — run manually in order after 028:**
 
-4. \`202611180029_attendance_quiz_database_integrity.sql\`
+4. `202611180029_attendance_quiz_database_integrity.sql`
    - Database-clock attendance creation and check-in validity, active-enrollment
      validation, session row locks during check-in/closure, correction audit table.
    - Immutable quiz-session timing and assignment/enrollment checks in SQL.
@@ -88,7 +88,7 @@ Prior permission fixes if missing:
    - Requires migrations 026–028 and existing quiz/attendance tables.
    - No existing student records are modified or dropped.
 
-5. \`202611180030_ai_request_quota.sql\`
+5. `202611180030_ai_request_quota.sql`
    - Atomic per-user, per-college budget of 30 paid OpenRouter requests per UTC hour.
    - Server-only RPC, RLS-protected usage data, no browser visibility.
    - Requires patch 029 and existing college/profile tables.
@@ -99,7 +99,7 @@ Prior permission fixes if missing:
 
 **Read-only verification SQL** (run after both patches):
 
-\`\`\`sql
+```sql
 select to_regclass('public.attendance_correction_audit') is not null as audit_table_ready,
        to_regclass('public.ai_request_usage') is not null as ai_quota_table_ready,
        to_regprocedure('public.consume_ai_request_quota(uuid,uuid)') is not null as ai_quota_rpc_ready;
@@ -112,10 +112,10 @@ select has_function_privilege('service_role',
            'public.consume_ai_request_quota(uuid,uuid)', 'EXECUTE') as server_can_charge_quota,
        has_function_privilege('authenticated',
            'public.consume_ai_request_quota(uuid,uuid)', 'EXECUTE') as browser_cannot_charge_quota;
-\`\`\`
+```
 
-The \`server_can_charge_quota\` result must be true and
-\`browser_cannot_charge_quota\` must be false. Confirm all four triggers are
+The `server_can_charge_quota` result must be true and
+`browser_cannot_charge_quota` must be false. Confirm all four triggers are
 enabled. Do NOT run a quota RPC as a read-only verification; it changes usage.
 
 **Staging regression scenarios:** a QR check-in delayed until after expiry must
@@ -133,11 +133,11 @@ production rollback; disable any new application route dependent on a failed
 migration until the prerequisite is fixed. Avoid removing the audit log or quota
 table if they contain real data. For a failed syllabus metadata deletion, the PDF
 now remains available. If metadata deletion succeeded but Storage cleanup failed,
-the API reports \`storageCleanupPending\`; inspect the orphaned object manually
+the API reports `storageCleanupPending`; inspect the orphaned object manually
 and remove it only after confirming no metadata row references it.
 
 **Known limitation:** the SQL trigger and RLS assertions are supplied as
-\`supabase/tests/campusclass_20_hardening.test.sql\`, but require a disposable
+`supabase/tests/campusclass_20_hardening.test.sql`, but require a disposable
 database with all ordered migrations. GitHub CI does not run a Supabase service
 or browser E2E suite; a passing GitHub build is not production acceptance.
 
