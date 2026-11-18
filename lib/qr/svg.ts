@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Vendored CommonJS QR encoder, used only on server. */
 import "server-only";
 
 // MIT-licensed QR encoding by Kazuhiko Arase, vendored from qrcode-terminal.

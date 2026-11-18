@@ -1,3 +1,4 @@
+import { nowEpochMs } from "@/lib/time";
 import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
@@ -78,7 +79,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
     ...(assignmentResult.data ?? []).map((item) => ({ key: "assignment:" + item.id, title: item.title, type: item.work_type ?? "assignment", maxMarks: Number(item.max_marks) })),
     ...(quizResult.data ?? []).map((item) => ({ key: "quiz:" + item.id, title: item.title, type: "quiz", maxMarks: Number(item.max_marks) })),
   ];
-  const completedSessions = new Set((sessionsResult.data ?? []).filter((item) => item.closed_at || Date.parse(item.expires_at) <= Date.now()).map((item) => item.id));
+  const completedSessions = new Set((sessionsResult.data ?? []).filter((item) => item.closed_at || Date.parse(item.expires_at) <= nowEpochMs()).map((item) => item.id));
   const people = (profilesResult.data ?? []).map((person) => {
     const scores = columns.map((column) => {
       const resourceId = column.key.split(":")[1];

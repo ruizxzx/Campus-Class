@@ -1,3 +1,4 @@
+import { nowEpochMs } from "@/lib/time";
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -25,7 +26,7 @@ export function AttendanceWorkspace({ role, classes, sessions, records, roster, 
   const staff = role !== "student";
   const classSessions = useMemo(() => sessions.filter((session) => session.class_id === classId), [sessions, classId]);
   const count = (id: string) => records.filter((record) => record.session_id === id && ["present", "late"].includes(record.status)).length;
-  const completed = classSessions.filter((session) => session.closed_at || Date.parse(session.expires_at) < Date.now());
+  const completed = classSessions.filter((session) => session.closed_at || Date.parse(session.expires_at) < nowEpochMs());
   const attended = completed.filter((session) => records.some((record) => record.session_id === session.id && ["present", "late"].includes(record.status))).length;
   const rate = completed.length ? Math.round(attended / completed.length * 100) : null;
 
@@ -107,7 +108,7 @@ export function AttendanceWorkspace({ role, classes, sessions, records, roster, 
           </div>}
         </section> : <section className="surface min-w-0 p-5 sm:p-6">
           <div className="mb-4 flex items-center gap-2"><QrCode size={20} className="text-[var(--green)]"/><h2 className="text-base font-semibold">Check in to your class</h2></div>
-          <p className="mb-4 text-xs leading-6 text-[var(--muted)]">Scan your faculty member's QR code. Confirm your attendance after opening the link. QR codes are time-limited, but are not proof of physical proximity.</p>
+          <p className="mb-4 text-xs leading-6 text-[var(--muted)]">Scan your faculty member&apos;s QR code. Confirm your attendance after opening the link. QR codes are time-limited, but are not proof of physical proximity.</p>
           {selectClass}
           <label className="mt-4 block text-xs font-semibold">Session ID<input className="input-base mt-2" value={sessionId} onChange={(event) => setSessionId(event.target.value)} placeholder="Filled when you scan the QR code"/></label>
           <label className="mt-4 block text-xs font-semibold">Check-in token<input className="input-base mt-2" value={token} onChange={(event) => setToken(event.target.value)} placeholder="Filled when you scan the QR code"/></label>
@@ -119,7 +120,7 @@ export function AttendanceWorkspace({ role, classes, sessions, records, roster, 
           <div className="max-h-[490px] space-y-3 overflow-y-auto overscroll-contain pr-1">
             {!classSessions.length && <p className="text-xs text-[var(--muted)]">No attendance sessions for this class yet.</p>}
             {classSessions.map((session) => {
-              const ended = Boolean(session.closed_at) || Date.parse(session.expires_at) < Date.now();
+              const ended = Boolean(session.closed_at) || Date.parse(session.expires_at) < nowEpochMs();
               return <div key={session.id} className="rounded-2xl border border-[var(--line)] p-3 sm:p-4">
                 <div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-sm font-semibold">{session.title}</p><p className="mt-1 text-xs text-[var(--muted)]">{new Date(session.starts_at).toLocaleString()}</p></div><span className={"status-pill " + (ended ? "" : "green")}>{ended ? "Ended" : "Active"}</span></div>
                 <div className="mt-3 text-xs text-[var(--muted)]">{staff ? count(session.id) + " checked in" : (records.some((record) => record.session_id === session.id && ["present","late"].includes(record.status)) ? "You attended" : ended ? "No check-in recorded" : "Awaiting check-in")}</div>

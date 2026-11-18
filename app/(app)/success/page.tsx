@@ -1,3 +1,4 @@
+import { nowEpochMs } from "@/lib/time";
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
@@ -59,9 +60,9 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   const assignmentIds = new Set((assignmentsResult.data ?? []).map((item) => item.id));
   const quizMap = new Map((quizResult.data ?? []).map((quiz) => [quiz.id, Number(quiz.max_marks)]));
   const sessions = (sessionsResult.data ?? []).filter((session) =>
-    session.closed_at || Date.parse(session.expires_at) <= Date.now());
+    session.closed_at || Date.parse(session.expires_at) <= nowEpochMs());
   const sessionIds = new Set(sessions.map((session) => session.id));
-  const now = Date.now();
+  const now = nowEpochMs();
 
   const students = studentIds.map((id) => {
     const submittedIds = new Set((submissionResult.data ?? [])
