@@ -42,7 +42,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     db.from("quiz_attempts").select("quiz_id,student_id,score,released_at").eq("college_id", collegeId).not("released_at", "is", null).limit(5000),
     db.from("attendance_sessions").select("id,expires_at,closed_at").eq("college_id", collegeId).eq("class_id", classId).limit(1000),
     db.from("attendance_records").select("session_id,student_id,status").eq("college_id", collegeId).eq("class_id", classId).limit(5000),
-    db.from("student_interventions").select("id,student_id,reason,note,status,created_at").eq("college_id", collegeId).eq("class_id", classId).order("created_at", { ascending: false }).limit(500),
+    db.from("student_interventions").select("id,student_id,reason,note,status,created_at,action_plan,follow_up_at,outcome_note,resolved_at").eq("college_id", collegeId).eq("class_id", classId).order("created_at", { ascending: false }).limit(500),
   ]);
   const errors = [rosterResult,assignmentsResult,submissionResult,quizResult,attemptsResult,sessionsResult,recordsResult,interventionsResult]
     .filter((result) => Boolean(result.error));

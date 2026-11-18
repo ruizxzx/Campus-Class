@@ -136,6 +136,14 @@ now remains available. If metadata deletion succeeded but Storage cleanup failed
 the API reports `storageCleanupPending`; inspect the orphaned object manually
 and remove it only after confirming no metadata row references it.
 
+6. `202611180031_intervention_followups.sql`
+   - Optional action plans, due dates, recorded outcomes and resolution time.
+   - Apply after patch 030, then deploy the revised Student Success UI and API.
+   - Existing interventions are retained with their new fields initially NULL.
+   - Verify with: `select column_name from information_schema.columns where
+     table_schema='public' and table_name='student_interventions' and
+     column_name in ('action_plan','follow_up_at','outcome_note','resolved_at');`
+
 **Known limitation:** the SQL trigger and RLS assertions are supplied as
 `supabase/tests/campusclass_20_hardening.test.sql`, but require a disposable
 database with all ordered migrations. GitHub CI does not run a Supabase service
