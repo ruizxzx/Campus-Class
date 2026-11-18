@@ -10,13 +10,13 @@ const code = ts.transpileModule(readFileSync(new URL('../app/api/schedules/route
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-function harness({ role = 'faculty', canManage = true, classError = null, assignmentError = null, insertError = null, deleteError = null, missingEntry = false } = {}) {
+function harness({ role = 'faculty', canManage = true, classError = null, assignmentError = null, insertError = null, deleteError = null, missingEntry = false, overlaps = [], location = '', facultyMappings = [] } = {}) {
   const activity = [];
   const db = {
     from(table) {
       let action = 'select';
       return {
-        select() { return this; }, eq() { return this; },
+        select() { return this; }, eq() { return this; }, lt() { return this; }, gt() { return this; }, in() { return this; }, limit() { return this; },
         async maybeSingle() {
           activity.push('read:' + table);
           if (table === 'classes') return { data: { id: 'class' }, error: classError };
@@ -32,7 +32,7 @@ function harness({ role = 'faculty', canManage = true, classError = null, assign
         delete() { action = 'delete'; return this; },
         then(success, failure) {
           activity.push(action + ':' + table);
-          return Promise.resolve({ error: deleteError }).then(success, failure);
+          return Promise.resolve(action === 'delete' ? { error: deleteError } : { data: table === 'class_schedule_entries' ? overlaps : facultyMappings, error: null }).then(success, failure);
         },
       };
     },
@@ -48,7 +48,7 @@ function harness({ role = 'faculty', canManage = true, classError = null, assign
   } });
   return {
     activity,
-    post: () => exports.POST({ json: async () => ({ class_id: 'class', weekday: 1, start_time: '09:00', end_time: '10:00', location: '', notes: '' }) }),
+    post: () => exports.POST({ json: async () => ({ class_id: 'class', weekday: 1, start_time: '09:00', end_time: '10:00', location, notes: '' }) }),
     delete: () => exports.DELETE({ json: async () => ({ id: 'entry' }) }),
   };
 }
@@ -58,7 +58,7 @@ test('faculty with an assigned class can insert a schedule entry', async () => {
   const response = await api.post();
   assert.equal(response.status, 200);
   assert.equal(response.body.success, true);
-  assert.deepEqual(api.activity, ['read:classes', 'read:class_faculty', 'insert:class_schedule_entries']);
+  assert.deepEqual(api.activity, ['read:classes', 'read:class_faculty', 'select:class_schedule_entries', 'insert:class_schedule_entries']);
 });
 test('insert permission failure points to SQL migration', async () => {
   const response = await harness({ insertError: { code: '42501' } }).post();
@@ -104,4 +104,21 @@ test('schedule deletion requires service-role grant', async () => {
   const response = await harness({ deleteError: { code: '42501' } }).delete();
   assert.equal(response.status, 503);
   assert.match(response.body.error, /SQL patch/i);
+});
+
+test('overlapping sessions in the same class cannot be scheduled', async () => {
+  const response = await harness({ overlaps: [{ class_id: 'class', location: '', start_time: '09:20', end_time: '10:30' }] }).post();
+  assert.equal(response.status, 409);
+  assert.match(response.body.error, /already has a timetable entry/i);
+});
+test('same room booking conflict is detected across classes', async () => {
+  const response = await harness({ location: 'Room One', overlaps: [{ class_id: 'other', location: 'room one', start_time: '09:30', end_time: '10:30' }] }).post();
+  assert.equal(response.status, 409);
+  assert.match(response.body.error, /room/i);
+});
+test('faculty assigned to two classes cannot overlap', async () => {
+  const response = await harness({ overlaps: [{ class_id: 'other', location: '', start_time: '09:10', end_time: '10:15' }],
+    facultyMappings: [{ class_id: 'class', faculty_id: 'faculty' }, { class_id: 'other', faculty_id: 'faculty' }] }).post();
+  assert.equal(response.status, 409);
+  assert.match(response.body.error, /faculty member/i);
 });
