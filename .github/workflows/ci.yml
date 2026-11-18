@@ -40,3 +40,39 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: sb_secret_ci_placeholder
           NEXT_PUBLIC_APP_URL: https://campusclass.example
           CRON_SECRET: ci_placeholder_secret
+
+
+  browser-smoke:
+    name: Anonymous Chromium browser acceptance
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install desktop and mobile test browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run anonymous desktop/mobile browser smoke tests
+        run: pnpm exec playwright test e2e/academic-pages.spec.ts --grep "Anonymous browser smoke"
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anonymous-browser-traces
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 5
