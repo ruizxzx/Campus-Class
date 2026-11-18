@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ArrowDown, ArrowUp, BookOpen, ClipboardCheck, FileUp, Megaphone, Plus, RadioTower, Trash2, Users, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -31,6 +32,8 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
   const [pinned, setPinned] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [course, setCourse] = useState({ subjectId: "", title: "", description: "" });
+  const [coursePublished, setCoursePublished] = useState(true);
+  const [previewCourse, setPreviewCourse] = useState(false);
   const [chapters, setChapters] = useState<CourseChapterDraft[]>([
     {
       id: crypto.randomUUID(),
@@ -130,61 +133,36 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
       setBusy(false);
       return;
     }
-    const db = createClient();
-    const { data: user } = await db.auth.getUser();
-    const { data: profile } = user.user
-      ? await db.from("profiles").select("college_id").eq("id", user.user.id).single()
-      : { data: null };
-    const { data: created, error } = await db.from("courses").insert({
-      college_id: profile?.college_id,
-      subject_id: course.subjectId,
-      title: course.title.trim(),
-      description: course.description.trim(),
-      status: "archived",
-    }).select("id").single();
-    let failure = error;
-    if (!failure && created) {
-      for (let modulePosition = 0; modulePosition < chapters.length && !failure; modulePosition += 1) {
-        const chapter = chapters[modulePosition];
-        const { data: module, error: moduleError } = await db.from("course_modules").insert({
-          college_id: profile?.college_id,
-          course_id: created.id,
-          title: chapter.title.trim(),
-          description: null,
-          position: modulePosition,
-        }).select("id").single();
-        failure = moduleError;
-        if (!failure && module) {
-          const lessonRows = chapter.lessons.map((lesson, lessonPosition) => ({
-            college_id: profile?.college_id,
-            module_id: module.id,
-            title: lesson.title.trim(),
-            plain_text: lesson.content.trim(),
-            video_url: lesson.video.trim() || null,
-            is_published: true,
-            position: lessonPosition,
-          }));
-          const { error: lessonError } = await db.from("course_lessons").insert(lessonRows);
-          failure = lessonError;
-        }
-      }
-      if (!failure) {
-        const { error: publishError } = await db.from("courses").update({ status: "active" }).eq("id", created.id);
-        failure = publishError;
-      }
-      if (failure) {
-        const { error: cleanupError } = await db.from("courses").delete().eq("id", created.id);
-        if (cleanupError) console.error("Unable to remove a partially created course", cleanupError);
-      }
+    if(!course.subjectId) {
+      toast.error("Choose a subject.");
+      setBusy(false);
+      return;
     }
-    setBusy(false);
-    if (failure) {
-      toast.error("Could not create and publish the complete course.");
-    } else {
-      toast.success("Course published.");
-      setCourse({ subjectId: "", title: "", description: "" });
-      setChapters([{ id: crypto.randomUUID(), title: "", lessons: [{ id: crypto.randomUUID(), title: "", content: "", video: "" }] }]);
+    try{
+      const result=await fetch("/api/courses/manage", {
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          action:"create",subject_id:course.subjectId,
+          title:course.title.trim(),description:course.description.trim(),
+          publish:coursePublished,
+          modules:chapters.map((chapter)=>({
+            title:chapter.title.trim(),description:null,
+            lessons:chapter.lessons.map((lesson)=>({
+              title:lesson.title.trim(),plain_text:lesson.content.trim(),
+              video_url:lesson.video.trim()||null,is_published:true,
+            })),
+          })),
+        }),
+      });
+      const data=await result.json().catch(()=>({error:"Unreadable course response."})) as {id?:string;error?:string};
+      if(!result.ok || !data.id)throw new Error(data.error??"Cannot save this course.");
+      toast.success(coursePublished?"Course published.":"Course draft saved.");
+      router.push("/faculty/courses/"+data.id+"/edit");
       router.refresh();
+    }catch(error) {
+      toast.error(error instanceof Error?error.message:"Course save failed.");
+    }finally {
+      setBusy(false);
     }
   }
 
@@ -305,6 +283,7 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green-strong)]"><BookOpen size={18} /></span>
               <div>
                 <h2 className="text-base font-semibold tracking-[-.025em]">Build a complete course</h2>
+                <Link href="/faculty/courses" className="mt-2 inline-block text-xs font-semibold text-[var(--green-strong)] underline">Edit or archive existing courses</Link>
                 <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Organize learning by subject, chapter, and multiple lecture episodes. Add YouTube links when a lecture has video.</p>
               </div>
             </div>
@@ -387,10 +366,28 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
               ))}
               <button type="button" className="btn-secondary w-full" onClick={() => setChapters((current) => [...current, { id: crypto.randomUUID(), title: "", lessons: [{ id: crypto.randomUUID(), title: "", content: "", video: "" }] }])}><Plus size={14}/>Add another chapter</button>
             </div>
-            <div className="flex justify-end border-t border-[var(--line)] pt-4">
-              <button className="btn-primary" disabled={busy || !subjects.length}>
-                <BookOpen size={15} />{busy ? "Publishing…" : "Publish course"}
-              </button>
+            <div className="space-y-3 border-t border-[var(--line)] pt-4">
+              <label className="flex min-h-11 items-center gap-3 text-xs font-semibold">
+                <input type="checkbox" checked={coursePublished} onChange={(event)=>setCoursePublished(event.target.checked)}/>
+                Publish this course to learners now
+              </label>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button type="button" className="btn-secondary" aria-expanded={previewCourse}
+                  onClick={()=>setPreviewCourse((visible)=>!visible)}>{previewCourse?"Hide preview":"Preview curriculum"}</button>
+                <button className="btn-primary" disabled={busy || !subjects.length}>
+                  <BookOpen size={15} />{busy?"Saving…":coursePublished?"Publish course":"Save draft"}
+                </button>
+              </div>
+              {previewCourse&&<section className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-4" aria-label="Course curriculum preview">
+                <h3 className="text-sm font-semibold">{course.title.trim()||"Untitled course"}</h3>
+                <p className="mt-1 whitespace-pre-wrap text-xs text-[var(--muted)]">{course.description}</p>
+                {chapters.map((chapter,index)=><div key={chapter.id} className="mt-3">
+                  <h4 className="text-xs font-semibold">{index+1}. {chapter.title||"Untitled chapter"}</h4>
+                  {chapter.lessons.map((lesson,j)=><p key={lesson.id} className="mt-1 text-[11px]">
+                    {index+1}.{j+1} {lesson.title||"Untitled lecture"} · {lesson.content.length} characters of notes
+                  </p>)}
+                </div>)}
+              </section>}
             </div>
           </form>
         ) : null}
