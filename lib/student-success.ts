@@ -3,6 +3,27 @@
  * Missing evidence is represented as null, never as a failing grade.
  * Decisions remain with faculty; the app must not automatically penalize students.
  */
+export type SupportRules = {
+  attendance_min_percent:number;
+  overdue_assignment_count:number;
+  quiz_min_percent:number;
+  min_attendance_sessions:number;
+  min_assigned_work:number;
+  min_released_quizzes:number;
+};
+export const DEFAULT_SUPPORT_RULES:SupportRules={
+  attendance_min_percent:75,overdue_assignment_count:2,quiz_min_percent:50,
+  min_attendance_sessions:3,min_assigned_work:2,min_released_quizzes:2,
+};
+export function validSupportRules(rules:SupportRules):boolean {
+  return Number.isFinite(rules.attendance_min_percent)
+    && rules.attendance_min_percent>=0&&rules.attendance_min_percent<=100
+    && Number.isFinite(rules.quiz_min_percent)
+    && rules.quiz_min_percent>=0&&rules.quiz_min_percent<=100
+    && [rules.overdue_assignment_count,rules.min_attendance_sessions,
+      rules.min_assigned_work,rules.min_released_quizzes]
+      .every((value)=>Number.isInteger(value)&&value>=1&&value<=100);
+}
 export type StudentSignalInput = {
   attendanceSessions: number;
   attendedSessions: number;
@@ -21,7 +42,10 @@ export type StudentSignal = {
   evidenceCount: number;
 };
 
-export function summarizeStudent(input: StudentSignalInput): StudentSignal {
+export function summarizeStudent(
+  input:StudentSignalInput,rules:SupportRules=DEFAULT_SUPPORT_RULES,
+):StudentSignal {
+  if(!validSupportRules(rules))throw new Error("Invalid Student Success support rules.");
   const bounded = (number: number) => Math.min(100, Math.max(0, Math.round(number)));
   const attendancePercent = input.attendanceSessions > 0
     ? bounded(input.attendedSessions / input.attendanceSessions * 100) : null;
@@ -32,16 +56,16 @@ export function summarizeStudent(input: StudentSignalInput): StudentSignal {
     ? bounded(quizzes.reduce((total, value) => total + value, 0) / quizzes.length) : null;
 
   const reasons: string[] = [];
-  if (input.attendanceSessions >= 3 && attendancePercent !== null && attendancePercent < 75) {
-    reasons.push("Attendance below 75% across recorded sessions");
+  if (input.attendanceSessions >= rules.min_attendance_sessions && attendancePercent !== null && attendancePercent < rules.attendance_min_percent) {
+    reasons.push("Attendance below "+rules.attendance_min_percent+"% across recorded sessions");
   }
-  if (input.overdueWork >= 2) {
+  if (input.overdueWork >= rules.overdue_assignment_count) {
     reasons.push(String(input.overdueWork) + " overdue assignments without recorded submissions");
   }
-  if (quizzes.length >= 2 && quizPercent !== null && quizPercent < 50) {
-    reasons.push("Average released quiz score below 50%");
+  if (quizzes.length >= rules.min_released_quizzes && quizPercent !== null && quizPercent < rules.quiz_min_percent) {
+    reasons.push("Average released quiz score below "+rules.quiz_min_percent+"%");
   }
-  const evidenceCount = Number(input.attendanceSessions >= 3) + Number(input.assignedWork >= 2) + Number(quizzes.length >= 2);
+  const evidenceCount = Number(input.attendanceSessions >= rules.min_attendance_sessions) + Number(input.assignedWork >= rules.min_assigned_work) + Number(quizzes.length >= rules.min_released_quizzes);
   const level = evidenceCount === 0 ? "insufficient_data"
     : reasons.length >= 2 ? "needs_support"
     : reasons.length === 1 ? "watch"

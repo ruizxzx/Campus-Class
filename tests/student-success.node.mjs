@@ -49,3 +49,23 @@ test("missing or invalid quiz scores do not become zero", () => {
   ],new Map([["quiz-1",100]]));
   assert.equal(released.has("one"),false);
 });
+
+test("college-configured support thresholds change only explainable signals",()=>{
+  const input={attendanceSessions:4,attendedSessions:3,assignedWork:5,
+    submittedWork:5,overdueWork:1,releasedQuizScores:[65,68]};
+  const ordinary=summarizeStudent(input);
+  assert.equal(ordinary.level,"on_track");
+  const custom=summarizeStudent(input,{
+    attendance_min_percent:80,overdue_assignment_count:1,quiz_min_percent:70,
+    min_attendance_sessions:3,min_assigned_work:2,min_released_quizzes:2,
+  });
+  assert.equal(custom.level,"needs_support");
+  assert.equal(custom.reasons.length,3);
+});
+test("invalid college support rules fail closed rather than mislabel students",()=>{
+  const defaults={attendance_min_percent:75,overdue_assignment_count:2,
+    quiz_min_percent:50,min_attendance_sessions:3,min_assigned_work:2,min_released_quizzes:2};
+  assert.throws(()=>summarizeStudent({attendanceSessions:0,attendedSessions:0,
+    assignedWork:0,submittedWork:0,overdueWork:0,releasedQuizScores:[]},
+    {...defaults,attendance_min_percent:-1}),/Invalid Student Success/);
+});
