@@ -15,8 +15,12 @@ export default async function AIStudyPage() {
         .in("class_id",classIds).order("created_at",{ascending:false}).limit(100)
     : {data:[],error:null};
   if(syllabusError) throw new Error("Cannot load accessible syllabi.");
+  const { data: personalNotes, error: notesError }=await db.from("personal_notes")
+    .select("id,title").eq("college_id",profile.college_id).eq("user_id",profile.id)
+    .order("updated_at",{ascending:false}).limit(100);
+  if(notesError)throw new Error("Cannot load personal note choices.");
   return <>
     <PageHeader title="Campus AI Study Copilot" description="Ask grounded questions, practise concepts and build personalized revision plans with referenced course material."/>
-    <AIStudyAssistant syllabi={syllabi??[]}/>
+    <AIStudyAssistant syllabi={syllabi??[]} notes={personalNotes??[]}/>
   </>;
 }

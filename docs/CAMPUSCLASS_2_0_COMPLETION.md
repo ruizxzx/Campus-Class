@@ -124,3 +124,12 @@ These checks reveal no plaintext API secrets. Do not query
 
 Passing CI certifies the checked code paths only; it is not a guarantee of
 zero bugs or full production certification.
+
+## Selected personal notes in the student AI Copilot
+
+The Copilot lists the signed-in student's own note titles, and sends the text of
+**one explicitly selected note** (up to 6,000 characters) to the configured
+college AI provider only for that request. The default is **do not share**.
+The API checks both college and user ownership and returns HTTP 403 for an
+unavailable note; it never reads another student's note for context. Notes
+are treated as untrusted reference data and can be cited as a personal source.
