@@ -21,9 +21,11 @@ the Supabase-managed root encryption key. Vercel's environment variable
 2. Run missing migrations **026, 027, 028, 029, 030, 031**, in sequence.
    Use the actual `supabase/migrations/` filenames; do not re-run patches
    that have already been applied without checking.
-3. Run [032: college AI Vault](../supabase/migrations/202611180032_college_ai_vault.sql)
-   and [033: question bank](../supabase/migrations/202611180033_question_bank.sql)
-   using the SQL Editor in that order. Neither SQL is run by ChatGPT.
+3. Run [032: college AI Vault](../supabase/migrations/202611180032_college_ai_vault.sql),
+   [033: question bank](../supabase/migrations/202611180033_question_bank.sql),
+   [034: configurable Gradebook weighting](../supabase/migrations/202611180034_class_gradebook_policies.sql),
+   and [035: Student Success support rules](../supabase/migrations/202611180035_student_success_rules.sql)
+   using the SQL Editor **in that order**. None is run by ChatGPT.
 4. Deploy the corresponding GitHub build.
 5. Sign in as college administrator → **Admin → AI settings**. Enter the
    original college **OpenRouter API key**, confirm the desired model and
@@ -54,7 +56,8 @@ from public.college_ai_settings;
 
 select table_name from information_schema.tables
 where table_schema='public'
-  and table_name in ('question_bank_items','ai_request_usage');
+  and table_name in ('question_bank_items','ai_request_usage',
+    'class_gradebook_policies','student_success_rules');
 ```
 
 These checks reveal no plaintext API secrets. Do not query
@@ -73,13 +76,19 @@ These checks reveal no plaintext API secrets. Do not query
   Reusable bank items do not expose answers to students.
 - **Student Success:** per-class evidence and actionable faculty
   interventions; active and overdue follow-up counts; exportable
-  *filtered* academic signals. Signals are explainable rules, not diagnoses.
+  *filtered* academic signals; college administrators can configure the
+  attendance, overdue work and quiz-score support thresholds.
+  Signals are explainable rules, not diagnoses.
 - **Gradebook:** paged assessment evidence; only released scores displayed,
   duplicate quiz attempts consolidated to the best released attempt;
-  per-learner recorded score average and CSV. Missing scores remain unknown.
+  per-learner recorded average, optional per-class category weighting
+  configured by authorized staff, score distribution, CSV and print.
+  Missing scores remain unknown; unconfigured weights do not imply an
+  official grading rule.
 - **Outcomes:** only released latest-assignment evaluations and best
   released quiz marks contribute; faculty can edit targets, view linked
-  evidence and unlink mappings, subject/class permissions re-checked.
+  evidence and unlink mappings, export/print reports and inspect gaps.
+  Subject/class permissions are re-checked.
 - **Learning Studio:** drag-and-drop chapter and lecture ordering with\n  accessible move-up/move-down button alternatives.\n- **Regression coverage:** GitHub pipeline executes Node tests,
   TypeScript, lint and Next.js production build.
 
@@ -92,7 +101,8 @@ These checks reveal no plaintext API secrets. Do not query
 - Test OpenRouter credentials + provider billing, the quota RPC, key rotation,
   AI with/without PDFs, expired signed URL behavior and long/malformed PDFs.
 - Confirm timed quiz expiry, draft recovery, question-bank imports, grading
-  release timing, Gradebook averages and mapping denominators.
+  release timing, Gradebook averages, per-class weight calculation, Student
+  Success threshold adjustments and Outcomes mapping denominators.
 - Test interventions, exports, mobile layout and keyboard interactions on
   actual browsers/devices; run end-to-end journeys against seeded staging.
 - Inspect production Vercel environment, logs, storage rules, job schedules,

@@ -171,7 +171,8 @@ or browser E2E suite; a passing GitHub build is not production acceptance.
 ## Additional completion work (November 18, 2026)
 
 See [completion and deployment guide](CAMPUSCLASS_2_0_COMPLETION.md) for the
-forward migrations 032 (Supabase Vault) and 033 (reusable question bank),
+forward migrations 032 (Supabase Vault), 033 (reusable question bank),
+034 (class Gradebook policies) and 035 (college Student Success rules),
 the administrator re-key process for old AI settings, on-demand PDF assistance,
 Student Success exports and Gradebook/Outcomes corrections.
 
