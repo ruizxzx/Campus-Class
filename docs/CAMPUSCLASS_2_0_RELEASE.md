@@ -168,12 +168,19 @@ or browser E2E suite; a passing GitHub build is not production acceptance.
 - During a temporary connection loss, opt into a private device draft in Notes,
   reload on the same device, reconnect and save; clear the local draft afterward.
 
+## Additional completion work (November 18, 2026)
+
+See [completion and deployment guide](CAMPUSCLASS_2_0_COMPLETION.md) for the
+forward migrations 032 (Supabase Vault) and 033 (reusable question bank),
+the administrator re-key process for old AI settings, on-demand PDF assistance,
+Student Success exports and Gradebook/Outcomes corrections.
+
 ## Work not yet complete or live-verified
 
-- AI reference material does NOT extract the full text from arbitrary uploaded PDFs;
-  it cites available published text and syllabus outlines only.
-- No comprehensive reusable question-bank authoring UI, secure proctoring, negative
-  marking or high-stakes exam certification.
+- On-demand PDF attachment is supported for a selected, accessible syllabus,
+  but durable extraction, embeddings and vector retrieval are not implemented.
+- A basic reusable staff question bank exists; advanced bulk authoring,
+  negative marking, secure proctoring and high-stakes certification do not.
 - No trained predictive model: transparent support rules are used instead.
 - Course reorder uses accessible arrow controls, not drag-and-drop editing.
 - Offline caching of private course PDFs is intentionally disabled. Unsaved note
