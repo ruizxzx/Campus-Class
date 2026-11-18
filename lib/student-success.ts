@@ -69,7 +69,7 @@ export function releasedQuizEvidence(
     const previous = last.get(key);
     if (!previous || attempt.attempt_number > previous.number) {
       last.set(key, { studentId: attempt.student_id, number: attempt.attempt_number,
-        percent: score / max * 100 });
+        percent: Math.round(score / max * 10000) / 100 });
     }
   }
   const byStudent = new Map<string, number[]>();
