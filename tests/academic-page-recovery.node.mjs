@@ -16,8 +16,8 @@ test("missing tables/columns have a deployment diagnosis, not an empty grade",()
   assert.equal(mod.missingOptionalAcademicTable({code:"PGRST116"}),false);
 });
 test("all three academic route modules handle query problems as visible UI",()=>{
-  for(const module of ["gradebook","outcomes","success"]){
-    const body=readFileSync(new URL("../app/(app)/"+module+"/page.tsx",import.meta.url),"utf8");
+  for(const area of ["gradebook","outcomes","success"]){
+    const body=readFileSync(new URL("../app/(app)/"+area+"/page.tsx",import.meta.url),"utf8");
     assert.match(body,/AcademicDataState/);
     assert.match(body,/academicLog/);
     assert.match(body,/try\s*\{db=createAdminClient\(\)/);
