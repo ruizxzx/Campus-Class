@@ -93,8 +93,20 @@ export async function POST(request: Request) {
     if (insertError) {
       await admin.storage.from("class-syllabi").remove([storagePath]);
       console.error("Syllabus metadata insert failed", { code: insertError.code, message: insertError.message });
-      if (insertError.code === "42P01") {
+      if (insertError.code === "42P01" || insertError.code === "PGRST205") {
         return NextResponse.json({ error: "The syllabus table is missing. Apply the latest Supabase migrations." }, { status: 503 });
+      }
+      if (insertError.code === "42501") {
+        return NextResponse.json({
+          error: "The server cannot save syllabus records due to a database permission issue. Apply the syllabus service-role access migration.",
+          code: insertError.code,
+        }, { status: 503 });
+      }
+      if (insertError.code === "23503") {
+        return NextResponse.json({
+          error: "The syllabus could not be linked to this class or faculty profile. Ask your college administrator to verify your account and class assignment.",
+          code: insertError.code,
+        }, { status: 409 });
       }
       return NextResponse.json({ error: "Could not save the syllabus.", code: insertError.code }, { status: 500 });
     }
