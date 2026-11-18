@@ -182,7 +182,7 @@ Student Success exports and Gradebook/Outcomes corrections.
 - A basic reusable staff question bank exists; advanced bulk authoring,
   negative marking, secure proctoring and high-stakes certification do not.
 - No trained predictive model: transparent support rules are used instead.
-- Course reorder uses accessible arrow controls, not drag-and-drop editing.
+- Learning Studio now supports chapter and lecture drag-and-drop reordering, with accessible arrow controls as a keyboard/touch fallback.
 - Offline caching of private course PDFs is intentionally disabled. Unsaved note
   drafts are strictly opt-in and are not synchronized between devices.
 - Shared navigation is multilingual but all app pages and faculty-generated
