@@ -36,6 +36,7 @@ type QuizDetailRow = {
   max_marks: number;
   attempts_allowed: number;
   show_score_after_submit: boolean;
+  shuffle_questions: boolean;
   status: string;
   class_id: string;
   classes: QuizClass | QuizClass[] | null;
@@ -61,7 +62,7 @@ export default async function QuizDetailPage({ params }: { params: Promise<{ id:
 
   const { data: quizRaw, error: quizError } = await db
     .from("quizzes")
-    .select("id,title,description,opens_at,closes_at,duration_minutes,max_marks,attempts_allowed,show_score_after_submit,status,class_id,classes(display_name,section,subjects(name))")
+    .select("id,title,description,opens_at,closes_at,duration_minutes,max_marks,attempts_allowed,show_score_after_submit,shuffle_questions,status,class_id,classes(display_name,section,subjects(name))")
     .eq("id", id)
     .maybeSingle();
 
@@ -198,6 +199,8 @@ export default async function QuizDetailPage({ params }: { params: Promise<{ id:
                   questions={questions}
                   attemptsRemaining={attemptsRemaining}
                   isOpen={isOpen}
+                  studentId={profile.id}
+                  shuffleQuestions={quiz.shuffle_questions}
                 />
               ) : attempts.length === 0 ? (
                 <div className="surface p-6">

@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { orderQuestions } from "@/lib/quiz-order";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -21,9 +22,13 @@ type Props = {
   questions: Question[];
   attemptsRemaining: number;
   isOpen: boolean;
+  studentId: string;
+  shuffleQuestions: boolean;
 };
 
-export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Props) {
+export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, studentId, shuffleQuestions }: Props) {
+  const orderedQuestions = useMemo(() => orderQuestions(questions, shuffleQuestions,
+    quizId + ":" + studentId + ":" + attemptsRemaining), [questions, shuffleQuestions, quizId, studentId, attemptsRemaining]);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
@@ -189,7 +194,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Pro
           <div className="h-full rounded-full bg-[var(--green-strong)] transition-[width] duration-150" style={{ width: `${progress}%` }} />
         </div>
       </section>
-      {questions.map((q, idx) => {
+      {orderedQuestions.map((q, idx) => {
         const rawOptions = Array.isArray(q.options) ? q.options : [];
         const currentAnswer = answers[q.id];
         const selectedValues = Array.isArray(currentAnswer) ? currentAnswer : [];
