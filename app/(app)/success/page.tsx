@@ -67,13 +67,13 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     db.from("attendance_records").select("session_id,student_id,status").eq("college_id", collegeId).eq("class_id", classId).limit(5000),
     db.from("student_interventions").select("id,student_id,reason,note,status,created_at,action_plan,follow_up_at,outcome_note,resolved_at").eq("college_id", collegeId).eq("class_id", classId).order("created_at", { ascending: false }).limit(500),
   ]);
-  const assignmentIds = (assignmentsResult.data ?? []).map((item) => item.id);
+  const assignmentIdList = (assignmentsResult.data ?? []).map((item) => item.id);
   const quizIds = (quizResult.data ?? []).map((item) => item.id);
   const [submissionResult, attemptsResult] = await Promise.all([
-    collectEvidence(assignmentIds, (batch, from, to) =>
+    collectEvidence<{ assignment_id: string; student_id: string }>(assignmentIdList, async (batch, from, to) =>
       db.from("assignment_submissions").select("assignment_id,student_id")
         .eq("college_id", collegeId).in("assignment_id", batch).order("id").range(from,to)),
-    collectEvidence(quizIds, (batch, from, to) =>
+    collectEvidence<{ quiz_id: string; student_id: string; score: number | null; attempt_number: number }>(quizIds, async (batch, from, to) =>
       db.from("quiz_attempts").select("quiz_id,student_id,score,attempt_number")
         .eq("college_id", collegeId).in("quiz_id", batch)
         .not("released_at", "is", null).order("id").range(from,to)),
