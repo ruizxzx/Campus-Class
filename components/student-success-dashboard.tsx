@@ -72,12 +72,12 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
     // Only authorized staff receive this private roster from the server.
     const escapeCell=(value:string|number)=>{
       const raw=String(value);
-      const safe=/^[=+\\-@\\t\\r]/.test(raw)?"'"+raw:raw;
+      const safe=/^[=+@\-\t\r]/.test(raw)?"'"+raw:raw;
       return '"' + safe.replaceAll('"','""') + '"';
     };
     const csv=[["Student","Attendance %","Submission %","Released quiz %","Support signal","Reasons"],
       ...displayed.map((person)=>[person.name,person.attendancePercent??"—",person.submissionPercent??"—",
-        person.quizPercent??"—",person.level,person.reasons.join("; ")])].map((cells)=>cells.map(escapeCell).join(",")).join("\\r\\n");
+        person.quizPercent??"—",person.level,person.reasons.join("; ")])].map((cells)=>cells.map(escapeCell).join(",")).join("\r\n");
     const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
     const link=document.createElement("a");link.href=url;link.download="campusclass-student-success.csv";
     document.body.appendChild(link);link.click();link.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
