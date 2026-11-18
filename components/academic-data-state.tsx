@@ -9,7 +9,7 @@ const messages:Record<AcademicIssue,{title:string;detail:string}>={
   },
   permissions:{
     title:"Academic database access needs repair",
-    detail:"The server could not access required academic records. No academic results are shown until the permission issue is resolved.",
+    detail:"The server cannot read required academic tables. Your college administrator should apply SQL patch 037 (service-role read grants) in the Campus Class Supabase project, then verify that the Vercel service-role key belongs to the same project. No grades are fabricated while access is denied.",
   },
   unavailable:{
     title:"Academic records are temporarily unavailable",
@@ -35,6 +35,7 @@ export function AcademicDataState({area,issue,admin=false}:{
         <h2 className="text-base font-semibold">{item.title}</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{item.detail}</p>
         <p className="mt-3 text-xs leading-5 text-[var(--muted)]">{area} is not currently able to show a verified dataset. Existing student records are not changed by this screen.</p>
+        {issue==="permissions"&&<p className="mt-2 text-xs text-[var(--muted)]">Ask your college administrator to run <a className="underline" href="https://github.com/ruizxzx/Campus-Class/blob/main/supabase/migrations/202611190037_academic_service_read_grants.sql" target="_blank" rel="noopener noreferrer">SQL patch 037</a> in the Campus Class database. This is a database change, not a browser setting.</p>}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {admin&&<Link href="/admin/academic-health" className="btn-primary">Open academic diagnostics</Link>}
           <a href="" className="btn-secondary">Reload page</a>
