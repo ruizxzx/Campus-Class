@@ -145,7 +145,10 @@ export async function POST(request: Request) {
         if(matchError){
           console.error("Indexed study retrieval failed",{code:matchError.code});
         }else{
-          indexedReferences=(matches??[])
+          const rows=(Array.isArray(matches)?matches:[]) as {
+            class_id:string;title:string;page_number:number|null;chunk_text:string;
+          }[];
+          indexedReferences=rows
             .filter((item)=>classIds.includes(item.class_id))
             .map((item,index)=>({
               id:"R"+(index+1),type:"Indexed syllabus PDF",
