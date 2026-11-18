@@ -5,8 +5,8 @@ import { useTheme } from "next-themes";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types/database";
 import { BrandMark } from "@/components/ui";
-import { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, Sun, Moon, LogOut, Plus, CalendarDays, ChartNoAxesCombined, School, ChevronDown, Menu, X, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower, PenLine } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, Sun, Moon, LogOut, Plus, CalendarDays, ChartNoAxesCombined, School, Menu, X, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower, PenLine } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 
 const iconMap = { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, CalendarDays, ChartNoAxesCombined, School, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower, PenLine } as const;
@@ -60,10 +60,10 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
   const navSections = itemsFor(profile.role);
   const allItems = navSections.flatMap((section) => section.items);
 
-  function closeMobileNav() {
+  const closeMobileNav = useCallback(() => {
     setMobileOpen(false);
     menuButtonRef.current?.focus();
-  }
+  }, []);
 
   // Lock background scrolling while the mobile drawer is open. Keep keyboard
   // navigation inside it and close it on Escape or when switching to desktop.
@@ -104,7 +104,7 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
       document.removeEventListener("keydown", handleKeyDown);
       desktop.removeEventListener("change", handleBreakpointChange);
     };
-  }, [mobileOpen]);
+  }, [mobileOpen, closeMobileNav]);
 
   async function signOut() {
     setSigningOut(true);
