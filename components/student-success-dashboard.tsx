@@ -4,13 +4,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Activity, AlertTriangle, BookOpenCheck, CheckCircle2, Search, ShieldCheck, Download } from "lucide-react";
 import Link from "next/link";
-import type { StudentSignal } from "@/lib/student-success";
+import { validSupportRules, type StudentSignal, type SupportRules } from "@/lib/student-success";
 
 type Student = StudentSignal & { id: string; name: string; email: string };
 type Intervention = { id: string; student_id: string; reason: string; note: string; status: string; created_at: string;
   action_plan: string | null; follow_up_at: string | null; outcome_note: string | null; resolved_at: string | null };
-export function StudentSuccessDashboard({ classId, classes, students, interventions, nowMs }: {
+export function StudentSuccessDashboard({ classId, classes, students, interventions, nowMs, rules, canEditRules, rulesAvailable }: {
   classId: string; classes: { id: string; name: string }[]; students: Student[]; interventions: Intervention[]; nowMs: number;
+  rules:SupportRules;canEditRules:boolean;rulesAvailable:boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState("all");
@@ -93,9 +94,10 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
           return <div key={item.label} className="surface p-5"><div className="flex items-center justify-between text-xs text-[var(--muted)]">{item.label}<Icon size={18}/></div><p className="mt-3 text-3xl font-bold tabular-nums">{item.value}</p></div>;
         })}
     </div>
+    {canEditRules&&<SupportRuleEditor initial={rules} available={rulesAvailable}/>}
     <section className="surface p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-base font-semibold">Academic support signals</h2><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Transparent rules: attendance below 75% (3+ sessions), 2+ overdue items, released quiz average below 50% (2+ results).</p></div>
+        <div><h2 className="text-base font-semibold">Academic support signals</h2><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Transparent rules: attendance below {rules.attendance_min_percent}% ({rules.min_attendance_sessions}+ sessions), {rules.overdue_assignment_count}+ overdue items, released quiz average below {rules.quiz_min_percent}% ({rules.min_released_quizzes}+ results).</p></div>
         <select className="input-base !w-auto max-w-full" value={classId} onChange={(event) => router.push("/success?class_id=" + encodeURIComponent(event.target.value))}>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
       </div>
       <div className="mt-5 flex flex-wrap gap-3">
@@ -162,4 +164,53 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
     </section>
     <p className="flex items-start gap-2 text-xs leading-5 text-[var(--muted)]"><ShieldCheck size={17} className="shrink-0"/>Signals are descriptive and depend on available records. They must never be used as an automated decision about student eligibility, discipline, or grading.</p>
   </div>;
+}
+
+function SupportRuleEditor({initial,available}:{initial:SupportRules;available:boolean}){
+  const [values,setValues]=useState<SupportRules>(initial);
+  const [busy,setBusy]=useState(false);
+  const router=useRouter();
+  const fields:{key:keyof SupportRules;label:string;max:number}[]=[
+    {key:"attendance_min_percent",label:"Attendance alert below (%)",max:100},
+    {key:"overdue_assignment_count",label:"Alert after overdue assignments",max:100},
+    {key:"quiz_min_percent",label:"Quiz average alert below (%)",max:100},
+    {key:"min_attendance_sessions",label:"Min attendance sessions",max:100},
+    {key:"min_assigned_work",label:"Min assignments for evidence",max:100},
+    {key:"min_released_quizzes",label:"Min released quizzes",max:100},
+  ];
+  const valid=validSupportRules(values);
+  async function save(){
+    setBusy(true);
+    try{
+      const response=await fetch("/api/success/rules",{
+        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(values),
+      });
+      const data=await response.json().catch(()=>({error:"Unreadable server response."}));
+      if(!response.ok)throw new Error(data.error??"Cannot save thresholds.");
+      toast.success("College support thresholds updated.");
+      router.refresh();
+    }catch(error){
+      toast.error(error instanceof Error?error.message:"Could not save support thresholds.");
+    }finally{setBusy(false);}
+  }
+  return <details className="surface p-4 sm:p-6">
+    <summary className="cursor-pointer text-sm font-semibold">Configure explainable support signals (college administrators)</summary>
+    <p className="mt-2 text-xs leading-5 text-[var(--muted)]">These rules identify students for faculty support only. They never alter official grades or make automated high-stakes decisions.</p>
+    {!available?<p className="mt-3 text-xs text-amber-600" role="alert">Apply SQL migration 035 before saving college-wide rules.</p>:<>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{fields.map(({key,label,max})=>
+        <label key={key} className="text-xs font-medium">{label}
+          <input className="input-base mt-1" type="number"
+            step={key==="attendance_min_percent"||key==="quiz_min_percent"?0.01:1}
+            min={key==="attendance_min_percent"||key==="quiz_min_percent"?0:1} max={max}
+            value={values[key]}
+            onChange={(event)=>setValues((current)=>({...current,[key]:Number(event.target.value)}))}/>
+        </label>)}</div>
+      <div className="mt-4 flex items-center gap-3">
+        <button type="button" className="btn-primary" disabled={busy||!valid} onClick={save}>
+          {busy?"Saving…":"Save support thresholds"}
+        </button>
+        {!valid&&<p className="text-xs text-rose-600">Enter valid thresholds.</p>}
+      </div>
+    </>}
+  </details>;
 }
