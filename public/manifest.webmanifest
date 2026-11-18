@@ -1,0 +1,17 @@
+{
+  "name": "CampusClass — Smart Campus Academic Workspace",
+  "short_name": "CampusClass",
+  "description": "Learning, attendance and academic intelligence for college communities.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#f5f6f4",
+  "theme_color": "#255b43",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}
