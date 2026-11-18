@@ -100,10 +100,11 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     .select("attendance_min_percent,overdue_assignment_count,quiz_min_percent,min_attendance_sessions,min_assigned_work,min_released_quizzes")
     .eq("college_id",collegeId).maybeSingle();
   const missingRulesTable=missingOptionalAcademicTable(rulesError);
-  if(rulesError&&!missingRulesTable)
+  if(rulesError&&!missingRulesTable){
     academicLog("success.rules",rulesError);
     return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
       <AcademicDataState module="Student Success" issue={academicIssueFor(rulesError)} admin={profile.role==="admin"}/></>;
+  }
   const rules:SupportRules=savedRules?{
     attendance_min_percent:Number(savedRules.attendance_min_percent),
     overdue_assignment_count:Number(savedRules.overdue_assignment_count),
