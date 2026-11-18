@@ -36,7 +36,34 @@ export async function POST(request: Request) {
     }
     if (!assignment) return NextResponse.json({ error: "You are not assigned to this class." }, { status: 403 });
   }
-  const { error } = await admin.from("class_schedule_entries").insert({
+  // Provide specific, actionable collisions before the database trigger
+  // performs its final race-safe check during INSERT.
+  const { data: overlaps, error: overlapsError } = await admin.from("class_schedule_entries")
+    .select("id,class_id,location,start_time,end_time")
+    .eq("college_id", context.profile.college_id).eq("weekday", parsed.data.weekday)
+    .lt("start_time", parsed.data.end_time).gt("end_time", parsed.data.start_time).limit(500);
+  if (overlapsError) return NextResponse.json({ error: "Could not check timetable availability." }, { status: 503 });
+  if ((overlaps ?? []).some((entry) => entry.class_id === parsed.data.class_id)) {
+    return NextResponse.json({ error: "This class already has a timetable entry that overlaps the selected time." }, { status: 409 });
+  }
+  const room = parsed.data.location.trim().toLocaleLowerCase("en");
+  if (room && (overlaps ?? []).some((entry) => entry.location?.trim().toLocaleLowerCase("en") === room)) {
+    return NextResponse.json({ error: "The selected room or meeting location is already booked at that time." }, { status: 409 });
+  }
+  if (overlaps?.length) {
+    const otherClassIds = [...new Set(overlaps.map((entry) => entry.class_id))];
+    const { data: facultyMappings, error: facultyError } = await admin.from("class_faculty")
+      .select("class_id,faculty_id").eq("college_id", context.profile.college_id)
+      .in("class_id", [parsed.data.class_id, ...otherClassIds]);
+    if (facultyError) return NextResponse.json({ error: "Could not check faculty timetable conflicts." }, { status: 503 });
+    const selectedFaculty = new Set((facultyMappings ?? []).filter((item) =>
+      item.class_id === parsed.data.class_id).map((item) => item.faculty_id));
+    if ((facultyMappings ?? []).some((item) => item.class_id !== parsed.data.class_id
+      && otherClassIds.includes(item.class_id) && selectedFaculty.has(item.faculty_id))) {
+      return NextResponse.json({ error: "A faculty member assigned to this class is teaching another class at the same time." }, { status: 409 });
+    }
+  }
+    const { error } = await admin.from("class_schedule_entries").insert({
     college_id: context.profile.college_id,
     class_id: parsed.data.class_id,
     created_by: context.userId,
@@ -47,6 +74,7 @@ export async function POST(request: Request) {
     notes: parsed.data.notes || null,
   });
   if (error) {
+    if (error.code === "23P01") return NextResponse.json({ error: "Timetable conflict: another class, room or assigned faculty member already occupies that slot." }, { status: 409 });
     if (error.code === "23505") return NextResponse.json({ error: "A schedule entry already exists at that class and start time." }, { status: 409 });
     if (error.code === "42P01" || error.code === "PGRST205") {
       return NextResponse.json({ error: "The timetable table is missing. Apply the academic planning Supabase migrations before adding entries." }, { status: 503 });
