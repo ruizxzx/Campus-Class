@@ -104,7 +104,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     <PageHeader title="Student Success Intelligence" description="Evidence-based academic support signals and faculty-owned follow-ups. Not AI diagnoses or automatic grading."/>
     <StudentSuccessDashboard
       classId={classroom.id} classes={classOptions} students={students}
-      interventions={interventionsResult.data ?? []}
+      interventions={interventionsResult.data ?? []} nowMs={now}
     />
   </>;
 }

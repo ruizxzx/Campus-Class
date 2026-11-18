@@ -9,8 +9,8 @@ import type { StudentSignal } from "@/lib/student-success";
 type Student = StudentSignal & { id: string; name: string; email: string };
 type Intervention = { id: string; student_id: string; reason: string; note: string; status: string; created_at: string;
   action_plan: string | null; follow_up_at: string | null; outcome_note: string | null; resolved_at: string | null };
-export function StudentSuccessDashboard({ classId, classes, students, interventions }: {
-  classId: string; classes: { id: string; name: string }[]; students: Student[]; interventions: Intervention[];
+export function StudentSuccessDashboard({ classId, classes, students, interventions, nowMs }: {
+  classId: string; classes: { id: string; name: string }[]; students: Student[]; interventions: Intervention[]; nowMs: number;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState("all");
@@ -133,7 +133,7 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
     </section>}
     <section className="surface p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">Faculty follow-ups</h2>
-        <p className="text-xs text-[var(--muted)]">{interventions.filter((item)=>item.status!=="resolved").length} active · {interventions.filter((item)=>item.status!=="resolved"&&item.follow_up_at&&Date.parse(item.follow_up_at)<Date.now()).length} overdue</p>
+        <p className="text-xs text-[var(--muted)]">{interventions.filter((item)=>item.status!=="resolved").length} active · {interventions.filter((item)=>item.status!=="resolved"&&item.follow_up_at&&Date.parse(item.follow_up_at)<nowMs).length} overdue</p>
       </div>
       <div className="mt-4 space-y-3">{interventions.length === 0 && <p className="text-xs text-[var(--muted)]">No support plans have been recorded yet.</p>}
       {interventions.map((item) => <div key={item.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[var(--line)] p-3">
