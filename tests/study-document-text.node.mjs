@@ -29,7 +29,7 @@ test("real form-feed boundaries generate page-aware chunk references",()=>{
   const doc=parsed(["First page contains source text with a useful complete concept.\fSecond page contains a different concept and citation context."]);
   const chunks=m.chunkExtractedPdf(doc);
   assert.equal(doc.pageBoundaries,true);
-  assert.deepEqual(chunks.map((item)=>item.page),[1,2]);
+  assert.deepEqual(Array.from(chunks,(item)=>item.page),[1,2]);
 });
 test("scanned/empty or oversized PDFs fail instead of inventing content",()=>{
   assert.throws(()=>parsed([""]),/too little/);
