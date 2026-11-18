@@ -80,7 +80,7 @@ These checks reveal no plaintext API secrets. Do not query
 - **Outcomes:** only released latest-assignment evaluations and best
   released quiz marks contribute; faculty can edit targets, view linked
   evidence and unlink mappings, subject/class permissions re-checked.
-- **Regression coverage:** GitHub pipeline executes Node tests,
+- **Learning Studio:** drag-and-drop chapter and lecture ordering with\n  accessible move-up/move-down button alternatives.\n- **Regression coverage:** GitHub pipeline executes Node tests,
   TypeScript, lint and Next.js production build.
 
 ## Required production checks before declaring release ready
