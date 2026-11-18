@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowUp, BrainCircuit, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowUp, BrainCircuit, ChevronDown, ChevronUp, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
 type ResourceType = "post" | "course" | "lesson" | "syllabus";
@@ -20,6 +20,20 @@ export function AIResourceAssistant({
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !compact) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open, compact]);
 
   async function ask(event: React.FormEvent) {
     event.preventDefault();
@@ -68,29 +82,59 @@ export function AIResourceAssistant({
         {!compact ? (open ? <ChevronUp size={15}/> : <ChevronDown size={15}/>) : null}
       </button>
       {open ? (
-        <div className={compact ? "mt-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-3" : "border-t border-[var(--line)] p-4"}>
-          {messages.length ? <div className="mb-3 max-h-72 space-y-2 overflow-y-auto" aria-live="polite">
-            {messages.map((message, index) => (
-              <div key={`${message.role}-${index}`} className={`rounded-xl px-3 py-2.5 text-xs leading-5 ${message.role === "user" ? "ml-8 bg-[var(--green-soft)]" : "mr-8 bg-[var(--surface-2)]"}`}>
-                <div className="mb-1 text-[9px] font-bold uppercase tracking-[.1em] text-[var(--muted)]">{message.role === "user" ? "You" : "CampusClass AI"}</div>
-                <p className="whitespace-pre-wrap">{message.content}</p>
+        compact ? (
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label="Ask AI about this resource" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+            <div className="flex max-h-[min(72vh,620px)] w-full max-w-lg flex-col overflow-hidden rounded-[20px] border border-[var(--line)] bg-[var(--surface)] shadow-2xl">
+              <header className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green-strong)]"><BrainCircuit size={16}/></span>
+                <div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">Ask AI about this resource</div><div className="mt-0.5 text-[9px] text-[var(--muted)]">Grounded in the current page text</div></div>
+                <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[var(--muted)] hover:bg-[var(--surface-2)]" onClick={() => setOpen(false)} aria-label="Close Ask AI"><X size={16}/></button>
+              </header>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                {messages.length ? <div className="space-y-2" aria-live="polite">
+                  {messages.map((message, index) => (
+                    <div key={`${message.role}-${index}`} className={`max-w-[88%] rounded-xl px-3 py-2.5 text-xs leading-5 ${message.role === "user" ? "ml-auto bg-[var(--green-soft)]" : "mr-auto bg-[var(--surface-2)]"}`}>
+                      <div className="mb-1 text-[9px] font-bold uppercase tracking-[.1em] text-[var(--muted)]">{message.role === "user" ? "You" : "CampusClass AI"}</div>
+                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                    </div>
+                  ))}
+                </div> : <div className="rounded-xl bg-[var(--surface-2)] px-4 py-5 text-center"><Sparkles size={18} className="mx-auto text-[var(--green-strong)]"/><p className="mt-2 text-xs font-semibold">What would you like to understand?</p><p className="mt-1 text-[10px] leading-5 text-[var(--muted)]">Ask for a summary, explanation, key ideas or a study question.</p></div>}
+                {loading ? <p className="mt-3 animate-pulse text-[10px] text-[var(--muted)]">Studying this resource…</p> : null}
               </div>
-            ))}
-          </div> : null}
-          {loading ? <p className="mb-3 animate-pulse text-[10px] text-[var(--muted)]">Studying this resource…</p> : null}
-          <form onSubmit={ask} className="flex items-end gap-2">
-            <textarea
-              className="input-base min-h-11 max-h-32 flex-1 resize-y !px-3 !py-2.5 text-xs"
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              maxLength={4000}
-              placeholder="Ask a question about this chapter…"
-              aria-label="Ask AI about this resource"
-            />
-            <button type="submit" className="btn-primary !h-10 !w-10 !shrink-0 !p-0" disabled={loading || !question.trim()} aria-label="Send question"><ArrowUp size={16}/></button>
-          </form>
-          <p className="mt-2 text-[9px] leading-4 text-[var(--muted)]">AI answers can make mistakes. The response is based only on this resource.</p>
-        </div>
+              <form onSubmit={ask} className="border-t border-[var(--line)] p-3">
+                <div className="flex items-end gap-2">
+                  <textarea
+                    className="input-base min-h-11 max-h-24 min-w-0 flex-1 resize-y !px-3 !py-2.5 text-xs"
+                    value={question}
+                    onChange={(event) => setQuestion(event.target.value)}
+                    maxLength={4000}
+                    placeholder="Ask a question about this chapter…"
+                    aria-label="Ask AI about this resource"
+                  />
+                  <button type="submit" className="btn-primary !h-10 !w-10 !shrink-0 !p-0" disabled={loading || !question.trim()} aria-label="Send question"><ArrowUp size={16}/></button>
+                </div>
+                <p className="mt-2 text-[9px] leading-4 text-[var(--muted)]">AI answers can make mistakes. The response is based only on this resource.</p>
+              </form>
+            </div>
+          </div>
+        ) : (
+          <div className="border-t border-[var(--line)] p-4">
+            {messages.length ? <div className="mb-3 max-h-72 space-y-2 overflow-y-auto" aria-live="polite">
+              {messages.map((message, index) => (
+                <div key={`${message.role}-${index}`} className={`max-w-[88%] rounded-xl px-3 py-2.5 text-xs leading-5 ${message.role === "user" ? "ml-auto bg-[var(--green-soft)]" : "mr-auto bg-[var(--surface-2)]"}`}>
+                  <div className="mb-1 text-[9px] font-bold uppercase tracking-[.1em] text-[var(--muted)]">{message.role === "user" ? "You" : "CampusClass AI"}</div>
+                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                </div>
+              ))}
+            </div> : null}
+            {loading ? <p className="mb-3 animate-pulse text-[10px] text-[var(--muted)]">Studying this resource…</p> : null}
+            <form onSubmit={ask} className="flex items-end gap-2">
+              <textarea className="input-base min-h-11 max-h-32 min-w-0 flex-1 resize-y !px-3 !py-2.5 text-xs" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={4000} placeholder="Ask a question about this chapter…" aria-label="Ask AI about this resource"/>
+              <button type="submit" className="btn-primary !h-10 !w-10 !shrink-0 !p-0" disabled={loading || !question.trim()} aria-label="Send question"><ArrowUp size={16}/></button>
+            </form>
+            <p className="mt-2 text-[9px] leading-4 text-[var(--muted)]">AI answers can make mistakes. The response is based only on this resource.</p>
+          </div>
+        )
       ) : null}
     </div>
   );

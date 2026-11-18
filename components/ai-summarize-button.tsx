@@ -33,9 +33,9 @@ export function AISummarizeButton({ resourceType, resourceId }: {
     <button type="button" className="btn-secondary !px-3 !py-2 text-[10px]" disabled={loading} onClick={() => void summarize()}>
       <Sparkles size={13}/>{loading ? "Summarizing…" : summary ? "Refresh summary" : "Summarize with AI"}
     </button>
-    {summary ? <div className="mt-3 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4">
+    {summary ? <div className="mt-3 max-h-[min(45vh,280px)] max-w-full overflow-y-auto rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4">
       <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.12em] text-[var(--green-strong)]"><Sparkles size={12}/>Study summary</div>
-      <p className="whitespace-pre-wrap text-xs leading-6">{summary}</p>
+      <p className="whitespace-pre-wrap break-words text-xs leading-6">{summary}</p>
       <p className="mt-2 text-[9px] text-[var(--muted)]">AI-generated from the text available in this learning item.</p>
     </div> : null}
   </div>;
