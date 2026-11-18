@@ -84,7 +84,12 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
         Math.min(100,values.reduce((sum,score)=>sum+score,0)/values.length/Number(assessment.max_marks)*100));
   }
   const outcomes = (outcomeResponse.data ?? []).map((item)=>{
-    const mappings = (allMappings ?? []).filter((mapping)=>mapping.outcome_id===item.id).map((mapping)=>{
+    const mappings = (allMappings ?? [])
+      .filter((mapping)=>mapping.outcome_id===item.id
+        && (mapping.assignment_id
+          ? assignmentIds.includes(mapping.assignment_id)
+          : Boolean(mapping.quiz_id && quizIds.includes(mapping.quiz_id))))
+      .map((mapping)=>{
       const kind=mapping.assignment_id?"assignment:":"quiz:";
       const id=mapping.assignment_id??mapping.quiz_id;
       return { id:mapping.id, key:kind+id, weight:Number(mapping.weight), observed:assessmentAverages.get(kind+id)??null };
