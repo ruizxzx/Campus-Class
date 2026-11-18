@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui";
 import { GradebookGrid } from "@/components/gradebook-grid";
 import { bestReleasedQuizScores, collectEvidence, releasedAssignmentMarks } from "@/lib/academic-evidence";
 import type { GradeWeights } from "@/lib/gradebook-policy";
+import { attendanceForStudent } from "@/lib/attendance-metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -113,9 +114,8 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
       }
       return quizMarks.get(resourceId + ":" + person.id) ?? null;
     });
-    const relevant = (attendanceResult.data ?? []).filter((item) => item.student_id === person.id
-      && completedSessions.has(item.session_id) && ["present","late"].includes(item.status));
-    const attendance = completedSessions.size ? Math.round(new Set(relevant.map((item) => item.session_id)).size / completedSessions.size * 100) : null;
+    const attendance=attendanceForStudent([...completedSessions],
+      (attendanceResult.data??[]).filter((item)=>item.student_id===person.id)).percent;
     return { id: person.id, name: person.full_name, scores, attendance };
   });
   return <>

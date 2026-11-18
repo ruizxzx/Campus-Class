@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui";
 import { StudentSuccessDashboard } from "@/components/student-success-dashboard";
 import { summarizeStudent, releasedQuizEvidence, DEFAULT_SUPPORT_RULES, validSupportRules, type SupportRules } from "@/lib/student-success";
 import { collectEvidence } from "@/lib/academic-evidence";
+import { attendanceForStudent, weeklyAcademicTrends } from "@/lib/attendance-metrics";
 
 
 export const dynamic = "force-dynamic";
@@ -40,9 +41,17 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     db.from("class_enrollments").select("student_id").eq("college_id", collegeId).eq("class_id", classId).eq("status", "active").limit(1000),
     db.from("assignments").select("id,due_at").eq("college_id", collegeId).eq("class_id", classId).eq("status", "published").limit(1000),
     db.from("quizzes").select("id,max_marks").eq("college_id", collegeId).eq("class_id", classId).limit(1000),
-    db.from("attendance_sessions").select("id,expires_at,closed_at").eq("college_id", collegeId).eq("class_id", classId).limit(1000),
-    db.from("attendance_records").select("session_id,student_id,status").eq("college_id", collegeId).eq("class_id", classId).limit(5000),
-    db.from("student_interventions").select("id,student_id,reason,note,status,created_at,action_plan,follow_up_at,outcome_note,resolved_at").eq("college_id", collegeId).eq("class_id", classId).order("created_at", { ascending: false }).limit(500),
+    db.from("attendance_sessions").select("id,starts_at,expires_at,closed_at").eq("college_id", collegeId).eq("class_id", classId).limit(1000),
+    collectEvidence<{session_id:string;student_id:string;status:string}>([classId],
+      async(batch,from,to)=>db.from("attendance_records")
+        .select("session_id,student_id,status").eq("college_id",collegeId)
+        .in("class_id",batch).order("id").range(from,to)),
+    collectEvidence<{id:string;student_id:string;reason:string;note:string;status:string;created_at:string;
+      action_plan:string|null;follow_up_at:string|null;outcome_note:string|null;resolved_at:string|null}>([classId],
+      async(batch,from,to)=>db.from("student_interventions")
+        .select("id,student_id,reason,note,status,created_at,action_plan,follow_up_at,outcome_note,resolved_at")
+        .eq("college_id",collegeId).in("class_id",batch)
+        .order("created_at",{ascending:false}).order("id").range(from,to)),
   ]);
   const assignmentIdList = (assignmentsResult.data ?? []).map((item) => item.id);
   const quizIds = (quizResult.data ?? []).map((item) => item.id);
@@ -50,19 +59,20 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     collectEvidence<{ assignment_id: string; student_id: string }>(assignmentIdList, async (batch, from, to) =>
       db.from("assignment_submissions").select("assignment_id,student_id")
         .eq("college_id", collegeId).in("assignment_id", batch).order("id").range(from,to)),
-    collectEvidence<{ quiz_id: string; student_id: string; score: number | null; attempt_number: number }>(quizIds, async (batch, from, to) =>
-      db.from("quiz_attempts").select("quiz_id,student_id,score,attempt_number")
+    collectEvidence<{ quiz_id: string; student_id: string; score: number | null; attempt_number: number; released_at:string|null }>(quizIds, async (batch, from, to) =>
+      db.from("quiz_attempts").select("quiz_id,student_id,score,attempt_number,released_at")
         .eq("college_id", collegeId).in("quiz_id", batch)
         .not("released_at", "is", null).order("id").range(from,to)),
   ]);
   const errors = [rosterResult,assignmentsResult,submissionResult,quizResult,attemptsResult,sessionsResult,recordsResult,interventionsResult]
     .filter((result) => Boolean(result.error));
-  if (errors.length || submissionResult.truncated || attemptsResult.truncated
+  if (errors.length || submissionResult.truncated || attemptsResult.truncated ||
+    recordsResult.truncated || interventionsResult.truncated
     || (rosterResult.data?.length ?? 0) >= 1000
     || (assignmentsResult.data?.length ?? 0) >= 1000
     || (quizResult.data?.length ?? 0) >= 1000
     || (sessionsResult.data?.length ?? 0) >= 1000
-    || (recordsResult.data?.length ?? 0) >= 5000) {
+) {
     console.error("Student success dataset failed", errors.map((result) => result.error?.code));
     return <><PageHeader title="Student Success Intelligence" description="Explainable early support signals, never automated academic penalties."/>
       <div role="alert" className="surface border-amber-500 p-5 text-sm">Could not load a complete academic evidence set. Verify the SQL migrations and query limits before interpreting support signals.</div></>;
@@ -100,15 +110,19 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
 
   const now = nowEpochMs();
 
+  const trends=weeklyAcademicTrends(sessionsResult.data??[],recordsResult.data??[],
+    attemptsResult.data??[],quizMap,studentIds,now);
+  const upcomingDeadlines=(assignmentsResult.data??[]).filter((item)=>item.due_at
+    && Date.parse(item.due_at)>now && Date.parse(item.due_at)<=now+7*86400000).length;
+
   const students = studentIds.map((id) => {
     const submittedIds = new Set((submissionResult.data ?? [])
       .filter((item) => item.student_id === id && assignmentIds.has(item.assignment_id)).map((item) => item.assignment_id));
-    const attendance = new Set((recordsResult.data ?? [])
-      .filter((item) => item.student_id === id && sessionIds.has(item.session_id) && ["present","late"].includes(item.status))
-      .map((item) => item.session_id));
+    const attendance = attendanceForStudent([...sessionIds],
+      (recordsResult.data ?? []).filter((item)=>item.student_id===id));
     const scores = releasedScores.get(id) ?? [];
     const metrics = summarizeStudent({
-      attendanceSessions: sessions.length, attendedSessions: attendance.size,
+      attendanceSessions: attendance.eligible, attendedSessions: attendance.attended,
       assignedWork: assignmentIds.size, submittedWork: submittedIds.size,
       overdueWork: (assignmentsResult.data ?? []).filter((item) => item.due_at
         && Date.parse(item.due_at) < now && !submittedIds.has(item.id)).length,
@@ -125,6 +139,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
       classId={classroom.id} classes={classOptions} students={students}
       interventions={interventionsResult.data ?? []} nowMs={now}
       rules={rules} canEditRules={profile.role==="admin"} rulesAvailable={!missingRulesTable}
+      trends={trends} upcomingDeadlines={upcomingDeadlines}
     />
   </>;
 }

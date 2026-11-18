@@ -5,13 +5,15 @@ import { toast } from "sonner";
 import { Activity, AlertTriangle, BookOpenCheck, CheckCircle2, Search, ShieldCheck, Download } from "lucide-react";
 import Link from "next/link";
 import { validSupportRules, type StudentSignal, type SupportRules } from "@/lib/student-success";
+import type { WeekSignal } from "@/lib/attendance-metrics";
 
 type Student = StudentSignal & { id: string; name: string; email: string };
 type Intervention = { id: string; student_id: string; reason: string; note: string; status: string; created_at: string;
   action_plan: string | null; follow_up_at: string | null; outcome_note: string | null; resolved_at: string | null };
-export function StudentSuccessDashboard({ classId, classes, students, interventions, nowMs, rules, canEditRules, rulesAvailable }: {
+export function StudentSuccessDashboard({ classId, classes, students, interventions, nowMs, rules, canEditRules, rulesAvailable, trends, upcomingDeadlines }: {
   classId: string; classes: { id: string; name: string }[]; students: Student[]; interventions: Intervention[]; nowMs: number;
   rules:SupportRules;canEditRules:boolean;rulesAvailable:boolean;
+  trends:WeekSignal[];upcomingDeadlines:number;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState("all");
@@ -94,7 +96,36 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
           return <div key={item.label} className="surface p-5"><div className="flex items-center justify-between text-xs text-[var(--muted)]">{item.label}<Icon size={18}/></div><p className="mt-3 text-3xl font-bold tabular-nums">{item.value}</p></div>;
         })}
     </div>
+    <section className="surface p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-sm font-semibold">Eight-week academic evidence trends</h2>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Measured from completed attendance sessions and actual released quiz marks. No data is never treated as zero.</p></div>
+        <span className="status-pill">{upcomingDeadlines} class deadlines in the next 7 days</span>
+      </div>
+      <div className="mt-5 grid gap-6 md:grid-cols-2">
+        {([{key:"attendance",label:"Attendance rate",count:"sessions"},
+          {key:"releasedQuiz",label:"Released quiz average",count:"quizSamples"}] as const).map((series)=>
+          <div key={series.key} className="min-w-0">
+            <h3 className="mb-3 text-xs font-semibold">{series.label}</h3>
+            <div className="space-y-2">{trends.map((period)=><div key={period.weekStart}
+              className="grid grid-cols-[54px_minmax(0,1fr)_65px] items-center gap-2 text-[11px]">
+              <span className="text-[var(--muted)]">{period.label}</span>
+              <div className="h-3 overflow-hidden rounded-full bg-[var(--line)]"
+                role="img" aria-label={period[series.key]===null
+                  ?series.label+": no evidence":series.label+": "+period[series.key]+" percent"}>
+                {period[series.key]!==null&&<div className="h-full rounded-full bg-[var(--green)]"
+                  style={{width:period[series.key]+"%"}}/>}
+              </div>
+              <span className="text-right tabular-nums">{period[series.key]===null?"No data":period[series.key]+"%"}</span>
+            </div>)}</div>
+            <p className="mt-3 text-[10px] text-[var(--muted)]">
+              {trends.reduce((sum,item)=>sum+item[series.count],0)} {series.key==="attendance"?"completed class sessions":"distinct released quiz scores"} across the displayed weeks
+            </p>
+          </div>)}
+      </div>
+    </section>
     {canEditRules&&<SupportRuleEditor initial={rules} available={rulesAvailable}/>}
+
     <section className="surface p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-base font-semibold">Academic support signals</h2><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Transparent rules: attendance below {rules.attendance_min_percent}% ({rules.min_attendance_sessions}+ sessions), {rules.overdue_assignment_count}+ overdue items, released quiz average below {rules.quiz_min_percent}% ({rules.min_released_quizzes}+ results).</p></div>
