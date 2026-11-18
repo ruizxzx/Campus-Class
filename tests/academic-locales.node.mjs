@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
 import {translateUi,isUiLanguage} from "../lib/ui-language.ts";
 test("extended academic and student-copilot labels render in Bengali and Hindi",()=>{
   for(const source of ["Outcome attainment","Academic support signals",
@@ -20,5 +21,5 @@ test("shared browser locale subscriptions notify nested components",()=>{
   assert.match(hook,/window.dispatchEvent\(new Event\(eventName\)\)/);
 });
 function requireSource(){
-  return require("node:fs").readFileSync(new URL("../lib/use-ui-language.ts",import.meta.url),"utf8");
+  return readFileSync(new URL("../lib/use-ui-language.ts",import.meta.url),"utf8");
 }
