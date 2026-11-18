@@ -185,3 +185,22 @@ Run `supabase/tests/syllabus_rag_security.test.sql` only on disposable
 staging database after applying migrations, and verify cross-college isolation
 with two simulated colleges. No live Supabase migration or tenant fixture
 security test has been executed by the assistant.
+
+## Real browser acceptance suite (requires staging credentials)
+
+A Playwright suite is available in `e2e/academic-pages.spec.ts` for
+mobile Chromium and desktop Chromium, using the existing `pnpm test:e2e`.
+Anonymous login/access tests run without credentials. Full authenticated tests
+check all three previously crashing academic pages, the migration diagnostic
+screen, viewport overflow and student role isolation.
+
+On **a disposable staging deployment** (not your production data), configure
+GitHub repository secrets `CAMPUSCLASS_E2E_ADMIN_EMAIL`,
+`CAMPUSCLASS_E2E_ADMIN_PASSWORD`,
+`CAMPUSCLASS_E2E_STUDENT_EMAIL`, and
+`CAMPUSCLASS_E2E_STUDENT_PASSWORD`.
+Then dispatch the **CampusClass Staging Browser Acceptance** workflow with
+the staging URL. Without credentials the authenticated tests correctly skip;
+a green anonymous-only run is NOT academic production certification.
+No authenticated live browser test has been performed against your Campus
+Class production project.
