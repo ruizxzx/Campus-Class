@@ -118,9 +118,9 @@ as $$
 $$;
 
 revoke all on function public.replace_syllabus_text_chunks(uuid,uuid,uuid,jsonb) from public,anon,authenticated;
-revoke all on function public.match_syllabus_text_chunks(uuid,uuid,extensions.vector(1536),integer) from public,anon,authenticated;
+revoke all on function public.match_syllabus_text_chunks(uuid,uuid,extensions.vector,integer) from public,anon,authenticated;
 grant execute on function public.replace_syllabus_text_chunks(uuid,uuid,uuid,jsonb) to service_role;
-grant execute on function public.match_syllabus_text_chunks(uuid,uuid,extensions.vector(1536),integer) to service_role;
+grant execute on function public.match_syllabus_text_chunks(uuid,uuid,extensions.vector,integer) to service_role;
 
 commit;
 
