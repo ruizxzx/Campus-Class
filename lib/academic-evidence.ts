@@ -55,3 +55,8 @@ export function releasedAssignmentMarks(
   }
   return values;
 }
+
+/** No query should be sent to PostgREST with an empty student-id .in() list. */
+export function emptyEvidence<T>():{data:T[];error:null;truncated:false}{
+  return {data:[],error:null,truncated:false};
+}

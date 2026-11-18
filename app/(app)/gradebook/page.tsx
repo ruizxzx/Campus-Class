@@ -2,29 +2,45 @@ import { nowEpochMs } from "@/lib/time";
 import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
+import { AcademicDataState } from "@/components/academic-data-state";
+import { academicIssueFor, academicLog, missingOptionalAcademicTable } from "@/lib/academic-health";
 import { GradebookGrid } from "@/components/gradebook-grid";
-import { bestReleasedQuizScores, collectEvidence, releasedAssignmentMarks } from "@/lib/academic-evidence";
+import { bestReleasedQuizScores, collectEvidence, emptyEvidence, releasedAssignmentMarks } from "@/lib/academic-evidence";
 import type { GradeWeights } from "@/lib/gradebook-policy";
 
 export const dynamic = "force-dynamic";
 
 export default async function GradebookPage({ searchParams }: { searchParams: Promise<{ class_id?: string }> }) {
   const profile = await requireProfile();
-  const db = createAdminClient();
+  let db:ReturnType<typeof createAdminClient>;
+  try{db=createAdminClient();}
+  catch{
+    academicLog("Gradebook.configuration", {code:"SERVER_CONFIG"});
+    return <><PageHeader title="Gradebook" description="Private academic reporting."/>
+      <AcademicDataState area="Gradebook" issue="configuration" admin={profile.role==="admin"}/></>;
+  }
   const collegeId = profile.college_id;
   const membership = profile.role === "admin"
     ? null
     : profile.role === "faculty"
       ? await db.from("class_faculty").select("class_id,can_manage_assignments").eq("college_id", collegeId).eq("faculty_id", profile.id)
       : await db.from("class_enrollments").select("class_id").eq("college_id", collegeId).eq("student_id", profile.id).eq("status", "active");
-  if (membership?.error) throw new Error("Unable to verify class membership.");
+  if(membership?.error){
+    academicLog("gradebook.membership",membership.error);
+    return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/>
+      <AcademicDataState area="Gradebook" issue={academicIssueFor(membership.error)} admin={profile.role==="admin"}/></>;
+  }
   const permittedIds = membership?.data?.map((row) => row.class_id) ?? [];
   const listQuery = db.from("classes").select("id,display_name,section,subjects(name)")
     .eq("college_id", collegeId).eq("is_active", true).order("display_name");
   const { data: classrooms, error: classError } = profile.role === "admin"
     ? await listQuery.limit(200)
     : permittedIds.length ? await listQuery.in("id", permittedIds).limit(200) : { data: [], error: null };
-  if (classError) throw new Error("Unable to load gradebook classes.");
+  if(classError){
+    academicLog("gradebook.classes",classError);
+    return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/>
+      <AcademicDataState area="Gradebook" issue={academicIssueFor(classError)} admin={profile.role==="admin"}/></>;
+  }
   const classes = (classrooms ?? []).map((item) => {
     const subject = Array.isArray(item.subjects) ? item.subjects[0] : item.subjects;
     return { id: item.id, name: (subject?.name ?? item.display_name ?? "Class") + " · " + item.section };
@@ -42,9 +58,11 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
     db.from("quizzes").select("id,title,max_marks").eq("college_id", collegeId).eq("class_id", classId).eq("status", "published").order("created_at").limit(100),
     db.from("attendance_sessions").select("id,closed_at,expires_at").eq("college_id", collegeId).eq("class_id", classId).limit(500),
   ]);
-  if (roster.error || assignmentResult.error || quizResult.error || sessionsResult.error) {
+  const initialError=roster.error||assignmentResult.error||quizResult.error||sessionsResult.error;
+  if(initialError){
+    academicLog("gradebook.initial",initialError);
     return <><PageHeader title="Academic gradebook" description="Published coursework, scores and attendance."/>
-      <p role="alert" className="surface p-5 text-sm">Unable to load gradebook. Check that Campus Class 2.0 migrations were applied.</p></>;
+      <AcademicDataState area="Gradebook" issue={academicIssueFor(initialError)} admin={profile.role==="admin"}/></>;
   }
   const ids = profile.role === "student" ? [profile.id] : (roster.data ?? []).map((item) => item.student_id);
   const assignmentIds = (assignmentResult.data ?? []).map((item) => item.id);
@@ -54,31 +72,35 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
     ids.length
       ? db.from("profiles").select("id,full_name").eq("college_id", collegeId).in("id", ids).limit(1000)
       : Promise.resolve({ data: [], error: null }),
-    collectEvidence<{ id:string; assignment_id:string; student_id:string; version:number }>(assignmentIds, async (batch,from,to) =>
+    ids.length ? collectEvidence<{ id:string; assignment_id:string; student_id:string; version:number }>(assignmentIds, async (batch,from,to) =>
       db.from("assignment_submissions").select("id,assignment_id,student_id,version").eq("college_id",collegeId)
-        .in("assignment_id",batch).in("student_id",ids).order("id").range(from,to)),
-    collectEvidence<{ id:string; quiz_id:string; student_id:string; score:number|null; released_at:string|null }>(quizIds, async (batch,from,to) =>
+        .in("assignment_id",batch).in("student_id",ids).order("id").range(from,to)) : emptyEvidence<{id:string;assignment_id:string;student_id:string;version:number}>(),
+    ids.length ? collectEvidence<{ id:string; quiz_id:string; student_id:string; score:number|null; released_at:string|null }>(quizIds, async (batch,from,to) =>
       db.from("quiz_attempts").select("id,quiz_id,student_id,score,released_at").eq("college_id",collegeId)
-        .in("quiz_id",batch).in("student_id",ids).order("id").range(from,to)),
-    collectEvidence<{ id:string; student_id:string; session_id:string; status:string }>(sessionIds, async (batch,from,to) =>
+        .in("quiz_id",batch).in("student_id",ids).order("id").range(from,to)) : emptyEvidence<{id:string;quiz_id:string;student_id:string;score:number|null;released_at:string|null}>(),
+    ids.length ? collectEvidence<{ id:string; student_id:string; session_id:string; status:string }>(sessionIds, async (batch,from,to) =>
       db.from("attendance_records").select("id,student_id,session_id,status").eq("college_id",collegeId)
-        .in("session_id",batch).in("student_id",ids).order("id").range(from,to)),
+        .in("session_id",batch).in("student_id",ids).order("id").range(from,to)) : emptyEvidence<{id:string;student_id:string;session_id:string;status:string}>(),
   ]);
   if (profilesResult.error || submissionResult.error || attemptsResult.error || attendanceResult.error
       || submissionResult.truncated || attemptsResult.truncated || attendanceResult.truncated
       || (roster.data?.length ?? 0)>=1000 || (assignmentResult.data?.length ?? 0)>=100
       || (quizResult.data?.length ?? 0)>=100 || (sessionsResult.data?.length ?? 0)>=500) {
-    throw new Error("Gradebook dataset incomplete: check database permissions or pagination limits.");
+    const error=profilesResult.error||submissionResult.error||attemptsResult.error||attendanceResult.error;
+    academicLog("gradebook.evidence",error??{code:"INCOMPLETE"});
+    return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/>
+      <AcademicDataState area="Gradebook" issue={error?academicIssueFor(error):"incomplete"} admin={profile.role==="admin"}/></>;
   }
   // Explicit per-class grading policy is optional. Without it we display
   // descriptive recorded-score averages, never invent an official weighting.
   const { data: policyRow, error: policyError } = await db.from("class_gradebook_policies")
     .select("assignment_weight,project_weight,quiz_weight,attendance_weight")
     .eq("college_id", collegeId).eq("class_id", classId).maybeSingle();
-  const missingPolicyTable = policyError?.code === "PGRST205"
-    || policyError?.code === "42P01" || policyError?.code === "PGRST116";
+  const missingPolicyTable=missingOptionalAcademicTable(policyError);
   if (policyError && !missingPolicyTable) {
-    throw new Error("Could not load class grading policy; verify database permissions.");
+    academicLog("gradebook.policy",policyError);
+    return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/>
+      <AcademicDataState area="Gradebook" issue={academicIssueFor(policyError)} admin={profile.role==="admin"}/></>;
   }
   const gradeWeights: GradeWeights | null = policyRow ? {
     assignment_weight: Number(policyRow.assignment_weight),
@@ -96,7 +118,9 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
       .select("id,submission_id,marks,released_at").eq("college_id",collegeId)
       .in("submission_id",batch).order("id").range(from,to));
   if (evaluationResult.error || evaluationResult.truncated) {
-    throw new Error("Gradebook evaluation evidence is incomplete.");
+    academicLog("gradebook.evaluations",evaluationResult.error??{code:"INCOMPLETE"});
+    return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/>
+      <AcademicDataState area="Gradebook" issue={evaluationResult.error?academicIssueFor(evaluationResult.error):"incomplete"} admin={profile.role==="admin"}/></>;
   }
   const assignmentMarks=releasedAssignmentMarks(submissions,evaluationResult.data);
   const quizMarks=bestReleasedQuizScores(attemptsResult.data);
