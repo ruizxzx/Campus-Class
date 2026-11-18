@@ -15,7 +15,7 @@ type SavedModule={
   course_lessons:SavedLesson[]|null;
 };
 type SavedCourse={
-  id:string;subject_id:string;title:string;description:string|null;status:string;
+  id:string;subject_id:string;title:string;description:string|null;status:string;updated_at:string;
 };
 type DraftLesson={
   localId:string;id?:string;title:string;plain_text:string;
@@ -84,7 +84,7 @@ export function CourseEditForm({course,modules}:{
       const response=await fetch("/api/courses/manage",{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({action:"update",course_id:course.id,subject_id:course.subject_id,
-          title:title.trim(),description,publish:published,
+          title:title.trim(),description,publish:published,revision:course.updated_at,
           modules:chapters.map((chapter)=>({
             ...(chapter.id?{id:chapter.id}:{}),
             title:chapter.title,description:chapter.description||null,
@@ -110,7 +110,7 @@ export function CourseEditForm({course,modules}:{
     try{
       const response=await fetch("/api/courses/manage",{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({action:"archive",course_id:course.id,subject_id:course.subject_id}),
+        body:JSON.stringify({action:"archive",course_id:course.id,subject_id:course.subject_id,revision:course.updated_at}),
       });
       const data=await response.json().catch(()=>({error:"Unreadable server response."})) as {error?:string};
       if(!response.ok)throw new Error(data.error??"Could not archive the course.");

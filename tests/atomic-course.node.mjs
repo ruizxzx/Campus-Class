@@ -7,6 +7,8 @@ const route=readFileSync(new URL("../app/api/courses/manage/route.ts",import.met
 test("staff curriculum changes are atomic and non-destructive",()=>{
   assert.match(sql,/create or replace function public.save_course_curriculum/);
   assert.match(sql,/for update/);
+  assert.match(sql,/p_expected_updated_at is distinct from v_current_updated_at/);
+  assert.match(route,/error.code==="40001"/);
   assert.match(sql,/student progress/);
   assert.match(sql,/raise exception 'Existing chapters\/lectures cannot be omitted/);
   assert.doesNotMatch(sql,/delete from public.course_lessons/i);

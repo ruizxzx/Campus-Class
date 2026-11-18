@@ -15,7 +15,7 @@ export default async function EditCoursePage({params}:{params:Promise<{courseId:
   if(!/^[0-9a-f-]{36}$/i.test(courseId))notFound();
   const db=await createClient();
   const {data:course,error}=await db.from("courses")
-    .select("id,college_id,subject_id,title,description,status,course_modules(id,title,description,position,course_lessons(id,title,plain_text,video_url,is_published,position))")
+    .select("id,college_id,subject_id,title,description,status,updated_at,course_modules(id,title,description,position,course_lessons(id,title,plain_text,video_url,is_published,position))")
     .eq("college_id",profile.college_id).eq("id",courseId).maybeSingle();
   if(error)throw new Error("Could not load editable course.");
   if(!course)notFound();
@@ -37,7 +37,9 @@ export default async function EditCoursePage({params}:{params:Promise<{courseId:
     <Link href="/faculty/courses" className="mb-4 inline-block text-xs font-semibold text-[var(--green-strong)] underline">
       Back to managed courses
     </Link>
-    <CourseEditForm course={{id:course.id,subject_id:course.subject_id,title:course.title,
-      description:course.description,status:course.status}} modules={modules}/>
+    <CourseEditForm key={course.updated_at}
+      course={{id:course.id,subject_id:course.subject_id,title:course.title,
+      description:course.description,status:course.status,updated_at:course.updated_at}}
+      modules={modules}/>
   </>;
 }

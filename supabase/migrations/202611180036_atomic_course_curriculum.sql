@@ -11,7 +11,8 @@ create or replace function public.save_course_curriculum(
   p_title text,
   p_description text,
   p_modules jsonb,
-  p_publish boolean
+  p_publish boolean,
+  p_expected_updated_at timestamptz
 ) returns uuid
 language plpgsql security definer set search_path=''
 as $$
@@ -19,6 +20,7 @@ declare
   v_actor_role text;
   v_subject uuid;
   v_course_id uuid;
+  v_current_updated_at timestamptz;
   v_module jsonb;
   v_lesson jsonb;
   v_module_id uuid;
@@ -54,7 +56,7 @@ begin
     if p_course_id is null then
       raise exception 'Course ID is required' using errcode='22023';
     end if;
-    select c.subject_id,c.id into v_subject,v_course_id
+    select c.subject_id,c.id,c.updated_at into v_subject,v_course_id,v_current_updated_at
     from public.courses c where c.id=p_course_id and c.college_id=p_college_id
     for update;
     if v_course_id is null then
@@ -63,6 +65,11 @@ begin
     if p_subject_id is distinct from v_subject then
       raise exception 'Changing a course subject would invalidate academic history'
         using errcode='22023';
+    end if;
+    if p_expected_updated_at is null or
+      p_expected_updated_at is distinct from v_current_updated_at then
+      raise exception 'Course changed since it was opened; reload before saving'
+        using errcode='40001';
     end if;
   end if;
 
@@ -189,14 +196,14 @@ begin
   end if;
   return v_course_id;
 end $$;
-revoke all on function public.save_course_curriculum(uuid,uuid,text,uuid,uuid,text,text,jsonb,boolean)
+revoke all on function public.save_course_curriculum(uuid,uuid,text,uuid,uuid,text,text,jsonb,boolean,timestamptz)
   from public,anon,authenticated;
-grant execute on function public.save_course_curriculum(uuid,uuid,text,uuid,uuid,text,text,jsonb,boolean)
+grant execute on function public.save_course_curriculum(uuid,uuid,text,uuid,uuid,text,text,jsonb,boolean,timestamptz)
   to service_role;
 commit;
 
 -- Read-only post-deploy verification:
 -- select has_function_privilege('service_role',
---  'public.save_course_curriculum(uuid,uuid,text,uuid,uuid,text,text,jsonb,boolean)', 'EXECUTE');
+--  'public.save_course_curriculum(uuid,uuid,text,uuid,uuid,text,text,jsonb,boolean,timestamptz)', 'EXECUTE');
 -- select has_function_privilege('authenticated',
---  'public.save_course_curriculum(uuid,uuid,text,uuid,uuid,text,text,jsonb,boolean)', 'EXECUTE');
+--  'public.save_course_curriculum(uuid,uuid,text,uuid,uuid,text,text,jsonb,boolean,timestamptz)', 'EXECUTE');
