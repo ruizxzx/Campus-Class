@@ -44,7 +44,7 @@ function harness({role="student",assigned=true,enrolled=true,closed=false,expire
       then(ok,bad){calls.push(operation+":"+table);return Promise.resolve({error:null}).then(ok,bad);},
     };return builder;
   }};
-  const zType={min(){return this;},max(){return this;},int(){return this;},uuid(){return this;}};
+  const zType={min(){return this;},max(){return this;},int(){return this;},uuid(){return this;},trim(){return this;}};
   const exports={};
   runInNewContext(compiled,{exports,Buffer,Date,URL,console:{error(){}},require(name){
     if(name==="node:crypto")return require("node:crypto");
