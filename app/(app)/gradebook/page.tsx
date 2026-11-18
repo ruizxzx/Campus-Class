@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui";
 import { GradebookGrid } from "@/components/gradebook-grid";
 import { bestReleasedQuizScores, collectEvidence, releasedAssignmentMarks } from "@/lib/academic-evidence";
 import type { GradeWeights } from "@/lib/gradebook-policy";
+import { attendanceForStudent } from "@/lib/attendance-metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -37,10 +38,10 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   </>;
   const classId = selected.id;
   const [roster, assignmentResult, quizResult, sessionsResult] = await Promise.all([
-    db.from("class_enrollments").select("student_id").eq("college_id", collegeId).eq("class_id", classId).eq("status", "active").limit(1000),
+    db.from("class_enrollments").select("student_id,enrolled_at").eq("college_id", collegeId).eq("class_id", classId).eq("status", "active").limit(1000),
     db.from("assignments").select("id,title,work_type,max_marks").eq("college_id", collegeId).eq("class_id", classId).eq("status", "published").order("created_at").limit(100),
     db.from("quizzes").select("id,title,max_marks").eq("college_id", collegeId).eq("class_id", classId).eq("status", "published").order("created_at").limit(100),
-    db.from("attendance_sessions").select("id,closed_at,expires_at").eq("college_id", collegeId).eq("class_id", classId).limit(500),
+    db.from("attendance_sessions").select("id,starts_at,closed_at,expires_at").eq("college_id", collegeId).eq("class_id", classId).limit(500),
   ]);
   if (roster.error || assignmentResult.error || quizResult.error || sessionsResult.error) {
     return <><PageHeader title="Academic gradebook" description="Published coursework, scores and attendance."/>
@@ -59,7 +60,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
         .in("assignment_id",batch).in("student_id",ids).order("id").range(from,to)),
     collectEvidence<{ id:string; quiz_id:string; student_id:string; score:number|null; released_at:string|null }>(quizIds, async (batch,from,to) =>
       db.from("quiz_attempts").select("id,quiz_id,student_id,score,released_at").eq("college_id",collegeId)
-        .in("quiz_id",batch).in("student_id",ids).order("id").range(from,to)),
+        .in("quiz_id",batch).in("student_id",ids).lte("released_at",new Date(nowEpochMs()).toISOString()).order("id").range(from,to)),
     collectEvidence<{ id:string; student_id:string; session_id:string; status:string }>(sessionIds, async (batch,from,to) =>
       db.from("attendance_records").select("id,student_id,session_id,status").eq("college_id",collegeId)
         .in("session_id",batch).in("student_id",ids).order("id").range(from,to)),
@@ -94,7 +95,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   const evaluationResult=await collectEvidence<{ id:string; submission_id:string; marks:number; released_at:string|null }>(
     submissionIds, async (batch,from,to)=>db.from("assignment_evaluations")
       .select("id,submission_id,marks,released_at").eq("college_id",collegeId)
-      .in("submission_id",batch).order("id").range(from,to));
+      .in("submission_id",batch).lte("released_at",new Date(nowEpochMs()).toISOString()).order("id").range(from,to));
   if (evaluationResult.error || evaluationResult.truncated) {
     throw new Error("Gradebook evaluation evidence is incomplete.");
   }
@@ -104,7 +105,9 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
     ...(assignmentResult.data ?? []).map((item) => ({ key: "assignment:" + item.id, title: item.title, type: item.work_type ?? "assignment", maxMarks: Number(item.max_marks) })),
     ...(quizResult.data ?? []).map((item) => ({ key: "quiz:" + item.id, title: item.title, type: "quiz", maxMarks: Number(item.max_marks) })),
   ];
-  const completedSessions = new Set((sessionsResult.data ?? []).filter((item) => item.closed_at || Date.parse(item.expires_at) <= nowEpochMs()).map((item) => item.id));
+  const completedSessions = (sessionsResult.data ?? []).filter((item) =>
+    item.closed_at || Date.parse(item.expires_at) <= nowEpochMs());
+  const enrolledAt=new Map((roster.data??[]).map((item)=>[item.student_id,Date.parse(item.enrolled_at)]));
   const people = (profilesResult.data ?? []).map((person) => {
     const scores = columns.map((column) => {
       const resourceId = column.key.split(":")[1];
@@ -113,9 +116,10 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
       }
       return quizMarks.get(resourceId + ":" + person.id) ?? null;
     });
-    const relevant = (attendanceResult.data ?? []).filter((item) => item.student_id === person.id
-      && completedSessions.has(item.session_id) && ["present","late"].includes(item.status));
-    const attendance = completedSessions.size ? Math.round(new Set(relevant.map((item) => item.session_id)).size / completedSessions.size * 100) : null;
+    const eligibleSessions=completedSessions.filter((session)=>
+      Date.parse(session.starts_at)>=(enrolledAt.get(person.id)??Number.POSITIVE_INFINITY));
+    const attendance=attendanceForStudent(eligibleSessions.map((session)=>session.id),
+      (attendanceResult.data??[]).filter((item)=>item.student_id===person.id)).percent;
     return { id: person.id, name: person.full_name, scores, attendance };
   });
   return <>

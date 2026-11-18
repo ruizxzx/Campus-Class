@@ -1,229 +1,97 @@
-# CampusClass
+# Campus Class 2.0
 
-CampusClass is a multi-tenant college academic workspace built with Next.js App Router, TypeScript, Tailwind CSS and Supabase. It provides separate administrator, faculty and student experiences with a shared academic data model.
+**Campus Class** is a college-scoped academic learning workspace for administrators, faculty and students, built using Next.js 16, React 19, TypeScript, Supabase Auth/Postgres/Storage, Tailwind CSS and pnpm. Repository: https://github.com/ruizxzx/Campus-Class.
 
-## Included in this repository
+> **Release status:** automated code checks and public browser smoke tests run in GitHub Actions. **Production readiness is not certified** until the college's own database migrations, authentication, two-tenant isolation, OpenRouter billing, and actual device tests pass on an isolated staging deployment. The assistant does not execute forward SQL patches on your hosted database.
 
-- Public product landing page and college administrator onboarding.
-- Supabase Auth with cookie-based server-side sessions and password recovery.
-- Administrator-created faculty/student accounts with temporary passwords; no invitation email is sent.
-- College, department, subject, class, faculty assignment and student enrollment workflows.
-- Server-validated enrollment code generation and class joining.
-- Assignment drafts and publishing, private reference materials, student submissions and version history.
-- Faculty evaluation with a separate release-controlled evaluation table so unreleased marks/feedback are not visible to students.
-- Class announcements, personal notifications (including daily deadline reminders), profile settings and academic reports.
-- PostgreSQL composite foreign keys, indexes, private helper functions, RLS policies and private Storage buckets.
-- Vercel-ready Next.js configuration and environment variable template.
+## Features
 
-## Prerequisites
+**Administrator:** institutional onboarding, departments, subjects, class roster, faculty assignments, user management, college AI provider connection, support thresholds, course and quiz authoring, grade policies, notifications, reports and audit records.
 
-- Node.js 20.9 or newer (Node 22 recommended).
-- npm 10 or newer.
-- A Supabase project with Auth, PostgreSQL and Storage enabled.
-- A Vercel account for hosting.
+**Faculty:** assignments/projects, submission evaluations with separate mark release, attendance QR sessions/corrections, timetable, announcements and class stream/chat, courses with chapter/lesson editing and publication, question bank/assessments, Student Success follow-up plans, class Gradebook/Outcomes.
 
-## 1. Install
+**Student:** class enrollment, private assignments/submissions, timed quizzes, released results, courses with completion progress, syllabi, AI Study Copilot grounded in published text or an explicitly selected syllabus PDF, notes, to-dos, notifications, PWA shell.
+
+**Security by design:** session-bound profiles, college-scoped database relations, RLS and service-only server APIs, release-gated grade visibility, no browser-supplied service-role keys, signed private resource URLs, atomic database quiz/timetable/attendance/course guards, rate-limited AI requests.
+
+## Requirements and installation
+
+Use Node.js 22 and **pnpm 10.0.0**. The repository commits `pnpm-lock.yaml`; do **not** use `npm install` or generate an unrelated `package-lock.json`.
 
 ```bash
-npm install
+corepack enable
+corepack prepare pnpm@10.0.0 --activate
+pnpm install --frozen-lockfile
 cp .env.example .env.local
+pnpm dev
 ```
 
-Commit the generated `package-lock.json` before the first GitHub push so local, CI and Vercel dependency installs use the same resolved versions. The source bundle does not include a lockfile because dependency installation could not complete in its build environment.
+Complete these server/client configuration settings in `.env.local` and the corresponding Vercel deployment environment:
 
-Fill in `.env.local`:
+| Variable | Scope | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | client/server | **Campus Class** Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | client/server | project publishable API key (not service key) |
+| `SUPABASE_SERVICE_ROLE_KEY` | server only | privileged operations from verified API routes |
+| `NEXT_PUBLIC_APP_URL` | client/server | deployment root URL (no secret) |
+| `CRON_SECRET` | server only | deadline reminder Cron authentication |
+| `OPENROUTER_ENCRYPTION_KEY` | server only, **legacy optional** | original 32-byte base64 master key for existing AES-encrypted rows only; **not needed for new keys after Vault SQL 032** |
 
-```dotenv
-NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-CRON_SECRET=use_a_long_random_secret
-```
+Never commit real values, put a service key in a `NEXT_PUBLIC_` variable, or print Vault decrypted secrets.
 
-`SUPABASE_SERVICE_ROLE_KEY` is a server-only secret. Do not prefix it with `NEXT_PUBLIC_`, commit it, paste it into client-side code, or expose it in browser tools. The project specification uses this environment variable name; a current Supabase secret key or compatible service-role key can be stored there.
+## Supabase database
 
-## 2. Apply the Supabase migration
+This project uses an **incremental, forward-only SQL migration chain** in `supabase/migrations/`. Apply only **missing** patches in lexicographic order using your **Campus Class project's** Supabase SQL Editor after backing up, testing on a disposable staging project and reviewing each change. Do **not** re-run old patches blindly. The assistant has not executed any production SQL.
 
-Install/use the Supabase CLI, authenticate and link this local project to your hosted project:
+- `202611170001` through `202611180028`: core tenant/academics, protected quiz/learning, class stream/chat, planning, attendance and timetable.
+- `202611180029`: database-clock attendance and quiz session guards.
+- `202611180030`: hourly atomic AI request quota.
+- `202611180031`: support intervention planning/outcome notes.
+- `202611180032`: Supabase Vault for college OpenRouter API secrets.
+- `202611180033`: reusable, staff-only question bank.
+- `202611180034`: per-class grading weights.
+- `202611180035`: configurable college Student Success rules.
+- `202611180036`: atomic course creation/edit, non-destructive publication, staff authorization and revision conflict guard.\n- `202611180037`: private student Copilot chat history with idempotent retries and clear history.
+
+Full filenames and ordered rollout details: **[deployment guide](docs/CAMPUSCLASS_2_0_COMPLETION.md)**. Run structural SQL checks in `supabase/tests/` on a **disposable** database seeded with at least two fictional colleges; do not seed production accounts with test data.
+
+### Repair the "college AI encryption key is not set" issue
+
+Storing the OpenRouter API key in Admin Settings previously required a **different** server-side `OPENROUTER_ENCRYPTION_KEY` to decrypt the saved ciphertext. New keys instead use Supabase Vault.
+
+1. Apply migration 032 and all earlier required migrations to the **actual Campus Class** Supabase project. Make sure 030 AI quota is present.
+2. Deploy the matching GitHub version to Vercel.
+3. Open **Admin → AI settings** and **re-enter the real college OpenRouter key**, select the model, enable AI, and save. This action moves the key into Vault.
+4. Test as an enrolled student in **AI Study Copilot** and review authenticated server logs. If a key was saved under the legacy AES scheme and the original master key is lost, it cannot be reconstructed; saving the OpenRouter key again is required.
+5. Check provider plan, billing, per-user hourly quota and permissions before enabling institution-wide usage.
+
+## Build and test
 
 ```bash
-npx supabase@latest login
-npx supabase@latest link --project-ref YOUR_PROJECT_REF
-npx supabase@latest db push --remote
+pnpm test:security    # Node feature & security regression tests
+pnpm test:unit        # Vitest pure-unit suite
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm exec playwright install chromium
+pnpm test:e2e         # local public browser smoke
 ```
 
-Supabase CLI v3 is local-first. The `--remote` flag is intentional when applying migrations to the linked hosted project. Review the SQL migration before applying it to production.
+GitHub workflow `.github/workflows/ci.yml` runs Node regressions, unit tests, typecheck, lint, production build and public desktop/mobile Chromium E2E tests. Tests under `e2e/roles.spec.ts` are **skipped** unless staged credentials are supplied; running public browser smoke does NOT verify authenticated multi-college isolation.
 
-Apply all migrations in timestamp order. In addition to the core schema:
+To run authorized read-only multi-role tests on a disposable staging site, set `E2E_BASE_URL`, `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`, `E2E_FACULTY_EMAIL`, `E2E_FACULTY_PASSWORD`, `E2E_STUDENT_EMAIL`, `E2E_STUDENT_PASSWORD`; then run `pnpm test:e2e`. **Never use real student credentials in CI or production test runs.**
 
-- `supabase/migrations/202611170001_campusclass_core.sql` creates the core schema, policies, and private Storage buckets.
-- `supabase/migrations/202611170002_learning_collaboration.sql` adds the learning and collaboration tables.
-- `supabase/migrations/202611170003_service_role_profile_access.sql` grants the server-only `service_role` the profile-table permissions used to provision faculty and student accounts.
-- `supabase/migrations/202611170004_service_role_activity_log_access.sql` grants the server-only `service_role` the activity-log permissions used by privileged routes.
-- `supabase/migrations/202611170005_service_role_enrollment_code_access.sql` grants the server-only `service_role` the class/code/enrollment permissions used to create invites and join classes.
-- `supabase/migrations/202611170006_assignment_management_rls.sql` re-scopes faculty assignment-management checks to the current college and refreshes assignment write policies.
-- `supabase/migrations/202611170007_learning_collaboration_hardening.sql` hardens collaboration, quiz, course, lesson-progress, achievement, and certificate permissions; validates and grades quiz answers; tracks daily learning streaks; and adds a score-safe attempt-summary RPC.
-- `supabase/migrations/202611170008_assignment_publishing_rls_repair.sql` reasserts the scoped assignment-management helper, authenticated insert grant, and faculty assignment-publishing policy.
-- `supabase/migrations/202611180015_build_13_activity_notifications.sql` adds idempotent notifications for stream posts/comments and respects selected-student post visibility.
-- `supabase/migrations/202611180016_build_13_learning_workflows.sql` adds private class-stream attachment access, subject-enrollment course visibility, quiz grading/release, and assessment/result notifications.
-- `supabase/migrations/202611180017_quiz_authoring_rpc.sql` adds an authenticated, atomic assessment-and-question authoring RPC with class-assignment checks.
+## Production deployment
 
-The database trigger only creates a college and administrator profile when a new Auth signup explicitly requests the `college_admin` onboarding flow. Faculty/student accounts are provisioned by a college administrator; role and college membership are assigned server-side.
+1. Use existing [Campus Class repository](https://github.com/ruizxzx/Campus-Class), branch `main`; you do **not** need to create another GitHub repository.
+2. Ensure Vercel project imports `main` and uses the committed `vercel.json` (`pnpm install --frozen-lockfile`, `pnpm run build`, and India-oriented Cron schedule).
+3. Apply all needed SQL patches to your Campus Class project **before enabling new features that require them**, ideally with maintenance/feature gates and rollback backup.
+4. Set the Vercel environment keys and Supabase Auth site/redirect URLs to your actual deployment, and complete the Vault admin re-key procedure.
+5. Validate faculty/student/admin accounts, submissions/grades release, attendance QR, quiz session expiration, course editing, AI PDF questions, 320px+ mobile layouts, keyboard navigation, PWA and provider failure behavior on a staging site.
+6. Review [deployment acceptance checklist](docs/CAMPUSCLASS_2_0_COMPLETION.md), [architecture](docs/ARCHITECTURE.md) and [API/security notes](docs/SECURITY_AND_API.md).
 
-Run structural database checks against a local Supabase stack:
+## Important limitations
 
-```bash
-npx supabase@latest start
-npx supabase@latest test db
-```
+Current AI assistance accepts a short-lived authorized syllabus PDF via OpenRouter. **It is not a persistent PDF extraction + page-aware pgvector retrieval system.** Rule-based support signals are not a validated predictive ML model. Comprehensive Bengali/Hindi content translations, certified high-stakes exam proctoring, offline private PDF caching and an actual live multi-college acceptance pass are also not completed. No codebase can reasonably be certified absolutely bug-free from a CI run alone.
 
-For production, also run the Supabase security advisors and verify the project Data API settings. The migration explicitly grants only the authenticated table operations used by the application; table grants and RLS policies are separate controls.
-
-## 3. Configure Supabase Auth
-
-In Supabase Dashboard → Authentication → URL Configuration:
-
-- Site URL: `http://localhost:3000` for local development.
-- Add redirect URL: `http://localhost:3000/**`.
-- Before deployment, add your Vercel production URL and preview URL pattern as appropriate.
-- College administrator registration uses Supabase email confirmation. Faculty and student accounts are created by a college administrator with confirmed email and a temporary password, so their onboarding does not send an email.
-
-Administrators can reset faculty/student passwords and share the new credentials through a secure channel. Members can change their own passwords and profile details after signing in. Supabase email delivery is still used for the optional self-service password recovery flow.
-
-## 4. Run locally
-
-```bash
-npm run dev
-```
-
-Open `http://localhost:3000`.
-
-## 5. Deploy to Vercel
-
-1. Create an **empty** GitHub repository named `campusclass` (or your preferred name). Do not initialize it with a README or license because this folder already contains those files.
-2. From the extracted project folder, run:
-
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial CampusClass release"
-   git branch -M main
-   git remote add origin https://github.com/YOUR_GITHUB_USERNAME/campusclass.git
-   git push -u origin main
-   ```
-
-   Replace `YOUR_GITHUB_USERNAME` with your GitHub account or organization. The repository is private/public according to the visibility you select when creating it.
-3. In Vercel, choose **Add New → Project**, import the repository and use the Next.js preset.
-3. Add all four environment variables from `.env.example` to the Vercel project. Use the same Supabase URL and keys for Preview/Production only where intended.
-4. Set `NEXT_PUBLIC_APP_URL` to your production URL, for example `https://campusclass.vercel.app`.
-5. Set `CRON_SECRET` to a long random secret in Vercel. It protects the deadline-reminder endpoint called by Vercel Cron.
-6. Add your production URL and Vercel preview URL pattern to Supabase Auth redirect URLs.
-7. Deploy. Vercel runs `npm install` and `npm run build` as configured in `vercel.json`. The daily cron runs at 08:30 India time and creates idempotent in-app reminders for assignments due within the next 36 hours.
-
-No Supabase credentials are included in this repository. A live Supabase project must be configured before authenticated features can run. This source bundle does not create a GitHub repository or Vercel project in your accounts; create the empty GitHub repository and import it to Vercel using the steps above.
-
-## Application routes
-
-### Public and authentication
-
-- `/` — landing page
-- `/register` — college administrator registration
-- `/login` — sign in
-- `/forgot-password` and `/reset-password` — password recovery
-- `/invite?token=...` — legacy invitation acceptance for unexpired invitations created by older builds
-
-### Administrator
-
-- `/dashboard`
-- `/admin/faculty`
-- `/admin/students`
-- `/admin/departments`
-- `/admin/subjects`
-- `/admin/classes`
-- `/admin/reports`
-- `/admin/settings`
-
-### Faculty
-
-- `/dashboard`
-- `/faculty/classes`
-- `/faculty/classes/[id]`
-- `/faculty/assignments`
-- `/faculty/assignments/new`
-- `/faculty/assignments/[id]`
-- `/faculty/submissions`
-- `/announcements`
-
-### Student
-
-- `/dashboard`
-- `/classes`
-- `/classes/[id]`
-- `/join`
-- `/assignments`
-- `/assignments/[id]`
-- `/results`
-- `/announcements`
-
-### Shared
-
-- `/notifications`
-- `/profile`
-- `/settings`
-
-## Security model
-
-- Tenant membership and role are read from `profiles`, not browser-supplied metadata.
-- The Auth trigger can bootstrap only a new college administrator; it cannot create faculty/student memberships.
-- Faculty/student membership is created by the server-side administrator account-creation route and is not set from browser-supplied metadata. The legacy invitation acceptance route remains only for unexpired invitations created by older builds.
-- Enrollment-code values and legacy invitation token values are never stored in plaintext; only SHA-256 hashes are stored.
-- Joining a class is server-validated against college membership, class status and enrollment state.
-- Submission timestamps and late status are generated server-side. Client-supplied timestamps are ignored.
-- Evaluation marks and feedback live in `assignment_evaluations`, separate from student-readable submission rows. Student RLS can read only released evaluations.
-- Storage buckets are private. Object policies check college, class and user path segments; signed URLs are short-lived. Students can clean up unsubmitted uploads, but cannot delete files after they are attached to a recorded submission.
-- The service-role key is used only from server routes and never from browser components.
-
-## Verification status and remaining production setup
-
-The source package includes automated TypeScript/build scripts and structural pgTAP schema checks. This delivery environment does not contain your Supabase project credentials, a linked database, or a GitHub/Vercel account session. Consequently, hosted migrations, email confirmation, two-college RLS integration tests, live file upload/download behavior and a production deployment have not been executed here. Do not treat those external checks as passed until they are run against your Supabase project.
-
-Before opening the application to real students, run an end-to-end acceptance pass with two separate colleges, each with an administrator, faculty member and students. Confirm that no account can read another tenant's data, that storage URLs fail outside the permitted class/owner scope, and that unreleased evaluations are invisible to student sessions.
-
-## Development commands
-
-```bash
-npm run dev       # local development
-npm run typecheck # TypeScript validation
-npm run lint      # ESLint
-npm run build     # production build
-```
-
-
-## CampusClass 1.1 — Expanded college LMS
-
-This build brings together the academic workflow foundation from CampusClass with selected classroom collaboration and structured-learning workflows inspired by ScholaFlow, plus learning-platform capabilities reviewed in LMS Front.
-
-### College-specific product model
-- One platform serves many independent colleges.
-- Every profile, class, course, assessment, stream, note, and certificate is tied to a college.
-- Academic ownership follows College → Department → Subject → Academic Year/Semester → Class Section → Assigned Faculty → Enrolled Students.
-- Students join a class inside their college using enrollment codes. Codes are never exposed as plaintext through ordinary table reads.
-- The build intentionally excludes creator course sales, marketplace checkout, Stripe Connect instructor payouts, school-subdomain storefronts, and unrelated consumer monetization.
-
-### Feature expansion
-- **Class activity stream:** class-specific posts, pinning, selected-student targeting, validated attachments, comments, filtering and pagination. Scheduled publication, realtime and post editing remain incomplete.
-- **Class chat:** college/class scoped messages with Supabase RLS; realtime-ready table.
-- **Study workspace:** personal private notes and assignment to-do aggregation.
-- **Structured learning:** college-owned courses visible to active learners enrolled in a matching subject class, with published lessons, lesson completion, curriculum navigation and supported video embeds. Full course authoring is still partial.
-- **Assessments:** draft/published multi-type quiz authoring, protected attempt submission, server-side grading for objective and manually scored short-answer questions, faculty release, and notifications. Timed autosave/resume and negative marking remain incomplete.
-- **Engagement:** XP/levels/streak data, achievements and college-issued certificates with verification metadata.
-- **Academic experience:** separate dashboards and role-scoped navigation for administrators, faculty and students.
-
-### New migration
-`supabase/migrations/202611170002_learning_collaboration.sql`
-
-Apply migrations in order. Review policies in a staging Supabase project before production, particularly quiz answer-key visibility and certificate verification policies. `quiz_questions.answer_key` must not be selected by student-facing queries; for high-stakes exams, move answer keys into a non-exposed table and grade through a server-side function before enabling live assessments.
-
-### Implementation status
-Build 1.3 adds the workflows above but is not production-certified. Apply migrations in timestamp order and complete the two-college role/RLS and private-storage tests before release. See `BUILD_NOTES_1.3.md` for verified command results and remaining gaps. Certificate PDF rendering, scheduled stream publication, realtime wiring, full rich-text authoring and the AI tutor remain follow-up work.
+License: see the repository's license if present.
