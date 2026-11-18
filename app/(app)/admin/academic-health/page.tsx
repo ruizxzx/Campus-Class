@@ -1,6 +1,6 @@
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PageHeader } from "@/components/ui";
+import { LocalizedPageHeader as PageHeader } from "@/components/localized-page-header";
 import { academicIssueFor, academicLog } from "@/lib/academic-health";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Database, ExternalLink } from "lucide-react";

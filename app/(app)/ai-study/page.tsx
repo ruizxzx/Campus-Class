@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { PageHeader } from "@/components/ui";
+import { LocalizedPageHeader as PageHeader } from "@/components/localized-page-header";
 import { AIStudyAssistant } from "@/components/ai-study-assistant";
 import { createClient } from "@/lib/supabase/server";
 

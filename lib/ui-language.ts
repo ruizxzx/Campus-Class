@@ -141,6 +141,58 @@ Object.assign(hi,{
   "Reload page":"पेज फिर लोड करें","Return to dashboard":"डैशबोर्ड पर लौटें",
 });
 
+
+Object.assign(bn,{
+  "Academic gradebook":"শিক্ষাগত নম্বর তালিকা",
+  "Published coursework and released grades.":"প্রকাশিত পাঠ্যকর্ম ও প্রকাশিত নম্বর।",
+  "Published coursework, scores and attendance.":"প্রকাশিত পাঠ্যকর্ম, নম্বর ও উপস্থিতি।",
+  "One place for assignment marks, quiz results and attendance. Students only see released grades.":"অ্যাসাইনমেন্টের নম্বর, কুইজের ফল ও উপস্থিতি এক জায়গায়। শিক্ষার্থীরা শুধু প্রকাশিত নম্বর দেখে।",
+  "A unified view of coursework, assessments and attendance.":"পাঠ্যকর্ম, মূল্যায়ন ও উপস্থিতির সমন্বিত বিবরণ।",
+  "Course outcomes":"শিখনফল","Course outcome analytics":"শিখনফলের বিশ্লেষণ",
+  "Evidence-informed course attainment.":"প্রমাণভিত্তিক শিখনফল অর্জন।",
+  "Evidence-informed outcome attainment and assessment mapping.":"প্রমাণভিত্তিক শিখনফল অর্জন ও মূল্যায়নের সংযোগ।",
+  "Link learning outcomes to evidence and track attainment from released assessments.":"শিখনফলের সঙ্গে প্রমাণ যুক্ত করুন এবং প্রকাশিত মূল্যায়ন থেকে অর্জন অনুসরণ করুন।",
+  "Student Success Intelligence":"শিক্ষার্থী অগ্রগতির বিশ্লেষণ",
+  "Explainable academic support.":"ব্যাখ্যাযোগ্য শিক্ষাগত সহায়তা।",
+  "Actionable, explainable academic support.":"ব্যবহারযোগ্য ও ব্যাখ্যাযোগ্য শিক্ষাগত সহায়তা।",
+  "Evidence-based academic support signals and faculty-owned follow-ups. Not AI diagnoses or automatic grading.":"প্রমাণভিত্তিক সহায়তার সূচক ও শিক্ষকের ফলো-আপ। এআই নির্ণয় বা স্বয়ংক্রিয় গ্রেডিং নয়।",
+  "Ask grounded questions, practise concepts and build personalized revision plans with referenced course material.":"পাঠ্য উপকরণের সূত্র ব্যবহার করে প্রশ্ন করুন, অনুশীলন করুন ও ব্যক্তিগত পুনরাবৃত্তির পরিকল্পনা তৈরি করুন।",
+  "Academic diagnostics":"শিক্ষাগত ডায়াগনস্টিক",
+  "Database schema and service-access checks for Student Success, Gradebook and Outcomes.":"শিক্ষার্থী অগ্রগতি, নম্বর তালিকা ও শিখনফলের ডেটাবেস এবং পরিষেবা-অ্যাক্সেস যাচাই।",
+  "What should I work on next?":"এরপর আমার কী নিয়ে পড়া উচিত?",
+  "Summarize my upcoming deadlines.":"আমার আসন্ন সময়সীমাগুলি সংক্ষেপে বলুন।",
+  "Help me understand my class syllabus.":"আমার ক্লাসের পাঠ্যসূচি বুঝতে সাহায্য করুন।",
+  "Ask about your classes or pending work…":"ক্লাস বা বাকি কাজ সম্পর্কে জিজ্ঞাসা করুন…",
+  "Ask about what is due, upcoming quizzes, your class syllabus, or a concept from published course material.":"বাকি কাজ, আসন্ন কুইজ, পাঠ্যসূচি বা প্রকাশিত পাঠের ধারণা সম্পর্কে প্রশ্ন করুন।",
+  "Grounded in accessible lessons, course notes, syllabus outlines and assignments.":"উপলব্ধ পাঠ, কোর্স নোট, পাঠ্যসূচির রূপরেখা ও অ্যাসাইনমেন্টের ভিত্তিতে।",
+  "No assigned class is available.":"কোনো নির্ধারিত ক্লাস পাওয়া যায়নি।",
+});
+Object.assign(hi,{
+  "Academic gradebook":"शैक्षणिक अंक तालिका",
+  "Published coursework and released grades.":"प्रकाशित पाठ्यकार्य और जारी अंक।",
+  "Published coursework, scores and attendance.":"प्रकाशित पाठ्यकार्य, अंक और उपस्थिति।",
+  "One place for assignment marks, quiz results and attendance. Students only see released grades.":"असाइनमेंट के अंक, क्विज़ परिणाम और उपस्थिति एक जगह। विद्यार्थियों को केवल जारी अंक दिखते हैं।",
+  "A unified view of coursework, assessments and attendance.":"पाठ्यकार्य, मूल्यांकन और उपस्थिति का एकीकृत विवरण।",
+  "Course outcomes":"अधिगम परिणाम","Course outcome analytics":"अधिगम परिणाम विश्लेषण",
+  "Evidence-informed course attainment.":"प्रमाण-आधारित अधिगम उपलब्धि।",
+  "Evidence-informed outcome attainment and assessment mapping.":"प्रमाण-आधारित परिणाम उपलब्धि और मूल्यांकन मानचित्रण।",
+  "Link learning outcomes to evidence and track attainment from released assessments.":"अधिगम परिणामों को प्रमाण से जोड़ें और प्रकाशित मूल्यांकन से उपलब्धि ट्रैक करें।",
+  "Student Success Intelligence":"विद्यार्थी प्रगति विश्लेषण",
+  "Explainable academic support.":"व्याख्यायोग्य शैक्षणिक सहायता।",
+  "Actionable, explainable academic support.":"कार्रवाई योग्य, व्याख्यायोग्य शैक्षणिक सहायता।",
+  "Evidence-based academic support signals and faculty-owned follow-ups. Not AI diagnoses or automatic grading.":"प्रमाण-आधारित सहायता संकेत और शिक्षक फॉलो-अप। यह AI निदान या स्वचालित ग्रेडिंग नहीं है।",
+  "Ask grounded questions, practise concepts and build personalized revision plans with referenced course material.":"संदर्भित पाठ्य सामग्री पर प्रश्न पूछें, अवधारणाओं का अभ्यास करें और व्यक्तिगत पुनरावृत्ति योजना बनाएँ।",
+  "Academic diagnostics":"शैक्षणिक निदान",
+  "Database schema and service-access checks for Student Success, Gradebook and Outcomes.":"विद्यार्थी प्रगति, अंक तालिका और परिणामों के डेटाबेस तथा सेवा पहुँच की जाँच।",
+  "What should I work on next?":"मुझे आगे क्या पढ़ना चाहिए?",
+  "Summarize my upcoming deadlines.":"मेरी आगामी समयसीमाओं का सार बताइए।",
+  "Help me understand my class syllabus.":"मेरी कक्षा का पाठ्यक्रम समझाइए।",
+  "Ask about your classes or pending work…":"कक्षाओं या लंबित कार्य के बारे में पूछें…",
+  "Ask about what is due, upcoming quizzes, your class syllabus, or a concept from published course material.":"लंबित कार्य, आगामी क्विज़, कक्षा के पाठ्यक्रम या प्रकाशित पाठ की अवधारणा पर प्रश्न पूछें।",
+  "Grounded in accessible lessons, course notes, syllabus outlines and assignments.":"उपलब्ध पाठ, कोर्स नोट्स, पाठ्यक्रम रूपरेखा और असाइनमेंट पर आधारित।",
+  "No assigned class is available.":"कोई निर्धारित कक्षा उपलब्ध नहीं है।",
+});
+
 export function translateUi(label: string, language: UiLanguage): string {
   if (language === "bn") return bn[label] ?? label;
   if (language === "hi") return hi[label] ?? label;
