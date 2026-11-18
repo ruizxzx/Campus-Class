@@ -24,6 +24,41 @@ export type ClassSummary = {
   subjects?: { name: string; code: string } | null;
 };
 
+export type ClassMessage = {
+  id: string;
+  college_id: string;
+  class_id: string;
+  sender_id: string;
+  body: string;
+  parent_id: string | null;
+  pinned_at: string | null;
+  attachment_path: string | null;
+  attachment_name: string | null;
+  attachment_mime: string | null;
+  attachment_size: number | null;
+  attachment_ready: boolean;
+  reaction_updated_at: string | null;
+  created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+};
+
+export type ClassMessageReaction = {
+  college_id: string;
+  class_id: string;
+  message_id: string;
+  user_id: string;
+  reaction: "👍" | "❤️" | "🎉" | "😄" | "👀";
+  created_at: string;
+};
+
+export type ClassChatReadState = {
+  college_id: string;
+  class_id: string;
+  user_id: string;
+  last_read_at: string;
+};
+
 export type Assignment = {
   id: string;
   college_id: string;
@@ -33,6 +68,7 @@ export type Assignment = {
   instructions: string | null;
   due_at: string | null;
   max_marks: number;
+  work_type?: "assignment" | "project";
   allow_late: boolean;
   allow_resubmission: boolean;
   status: "draft" | "published" | "archived";

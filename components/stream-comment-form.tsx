@@ -1,2 +1,58 @@
-"use client";import {useState} from "react";import {useRouter} from "next/navigation";import {createClient} from "@/lib/supabase/client";import {toast} from "sonner";import {Send} from "lucide-react";
-export function StreamCommentForm({postId}:{postId:string}){const [body,setBody]=useState("");const [busy,setBusy]=useState(false);const router=useRouter();async function send(){if(!body.trim())return;setBusy(true);const db=createClient();const {data:{user}}=await db.auth.getUser();if(!user){toast.error("Please sign in again");setBusy(false);return;}const {data:profile}=await db.from("profiles").select("college_id").eq("id",user.id).single();const {error}=await db.from("stream_comments").insert({college_id:profile?.college_id,post_id:postId,author_id:user.id,body:body.trim()});if(error)toast.error(error.message);else{setBody("");toast.success("Comment added");router.refresh();}setBusy(false);}return <div className="flex gap-2"><input className="input flex-1" value={body} onChange={e=>setBody(e.target.value)} placeholder="Add to the discussion…"/><button className="btn-primary" onClick={send} disabled={busy||!body.trim()}><Send size={14}/></button></div>}
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Send } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+
+export function StreamCommentForm({ postId }: { postId: string }) {
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const router = useRouter();
+
+  async function send(event: React.FormEvent) {
+    event.preventDefault();
+    const trimmed = body.trim();
+    if (!trimmed || trimmed.length > 10000) return;
+    setBusy(true);
+    const db = createClient();
+    const { data: { user }, error: userError } = await db.auth.getUser();
+    if (userError || !user) {
+      toast.error("Please sign in again to comment.");
+      setBusy(false);
+      return;
+    }
+
+    const { error } = await db.from("stream_comments").insert({
+      post_id: postId,
+      author_id: user.id,
+      body: trimmed,
+    });
+    setBusy(false);
+    if (error) {
+      toast.error("Could not add your comment. You may not have access to this discussion.");
+      return;
+    }
+    setBody("");
+    toast.success("Comment added.");
+    router.refresh();
+  }
+
+  return (
+    <form onSubmit={send} className="flex gap-2">
+      <label className="sr-only" htmlFor="stream-comment">Add a comment</label>
+      <input
+        id="stream-comment"
+        className="input flex-1"
+        value={body}
+        onChange={(event) => setBody(event.target.value)}
+        maxLength={10000}
+        placeholder="Add to the discussion…"
+      />
+      <button type="submit" className="btn-primary" aria-label="Send comment" disabled={busy || !body.trim()}>
+        <Send size={14} />
+      </button>
+    </form>
+  );
+}

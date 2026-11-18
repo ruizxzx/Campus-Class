@@ -34,8 +34,17 @@ Create a new empty GitHub repository and push the project using the commands in 
 ## CampusClass 1.1 expanded module checks
 
 - [ ] Apply `202611170002_learning_collaboration.sql` after the core migration in a disposable Supabase project.
+- [ ] Apply Build 1.3 migrations `202611180015_build_13_activity_notifications.sql`, `202611180016_build_13_learning_workflows.sql`, and `202611180017_quiz_authoring_rpc.sql` in timestamp order.
+- [ ] Apply `202611180018_class_chat_groups.sql` after the existing Build 1.3 migrations.
 - [ ] Validate RLS for posts, stream targets, private comments, chat, notes, to-do, quizzes, courses, progress, achievements and certificates using admin/faculty/student test users from two colleges.
-- [ ] Prevent student clients from selecting quiz answer keys; use a server-side grading function before enabling assessments.
+- [ ] Verify targeted stream notifications, attachment signed URLs, and storage denial for non-recipients and unrelated colleges.
+- [ ] Verify objective auto-grading, short-answer grading, and result release against student/faculty/admin roles in two colleges.
+- [ ] Verify assigned faculty can atomically create and publish a quiz with questions; verify unassigned faculty, students, inactive users and cross-college class IDs are rejected.
+- [ ] Verify Class Chat lists only active class sections the current admin/faculty/student can access and that legacy `/chat?class=<id>` links open the intended room.
+- [ ] Verify section members can post, reply, react, edit their own messages, mark rooms read and receive one notification per new message; verify only assigned faculty/admin can pin or moderate other users' messages.
+- [ ] Verify chat attachments reject unsupported MIME/signatures and oversize files, use private storage and expiring downloads, and cannot be fetched from another section or college.
+- [ ] Verify Realtime message and reaction updates for enrolled students and assigned faculty, including membership removal and inactive class behavior.
+- [ ] Prevent student clients from selecting quiz answer keys; confirm server-side grading and release functions before enabling assessments.
 - [ ] Add a certificate verification endpoint that returns only minimum non-sensitive fields by certificate number.
 - [ ] Configure scheduled publication and realtime subscriptions before marketing those capabilities as live.
 - [ ] Test chat/stream/comment abuse limits and upload access controls.

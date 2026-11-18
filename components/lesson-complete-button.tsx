@@ -1,2 +1,68 @@
-"use client";import {useState} from "react";import {createClient} from "@/lib/supabase/client";import {toast} from "sonner";import {CheckCircle2} from "lucide-react";import {useRouter} from "next/navigation";
-export function LessonCompleteButton({lessonId,completed}:{lessonId:string;completed:boolean}){const [done,setDone]=useState(completed);const [busy,setBusy]=useState(false);const router=useRouter();async function toggle(){setBusy(true);const db=createClient();const {data:{user}}=await db.auth.getUser();if(!user){toast.error("Session expired");setBusy(false);return;}if(done){toast.error("Lesson completion cannot be removed from this view");setBusy(false);return;}const {data:profile}=await db.from("profiles").select("college_id").eq("id",user.id).single();const {error}=await db.from("lesson_progress").insert({college_id:profile?.college_id,lesson_id:lessonId,student_id:user.id});if(error)toast.error(error.message);else{setDone(true);toast.success("Lesson marked complete");router.refresh();}setBusy(false);}return <button disabled={busy||done} onClick={toggle} className="btn-secondary">{done?<><CheckCircle2 size={14}/>Completed</>: "Mark lesson complete"}</button>}
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
+
+export function LessonCompleteButton({
+  lessonId,
+  completed,
+  onComplete,
+}: {
+  lessonId: string;
+  completed: boolean;
+  onComplete?: () => void;
+}) {
+  const [done, setDone] = useState(completed);
+  const [busy, setBusy] = useState(false);
+  const router = useRouter();
+
+  async function markComplete() {
+    if (done || busy) return;
+    setBusy(true);
+    try {
+      const db = createClient();
+      const { data: { user }, error: authError } = await db.auth.getUser();
+      if (authError || !user) {
+        toast.error("Your session has expired. Sign in again to save progress.");
+        return;
+      }
+
+      const { data: profile, error: profileError } = await db.from("profiles")
+        .select("college_id")
+        .eq("id", user.id)
+        .single();
+      if (profileError || !profile) {
+        toast.error("Your college profile could not be verified.");
+        return;
+      }
+
+      const { error } = await db.from("lesson_progress").upsert(
+        { college_id: profile.college_id, lesson_id: lessonId, student_id: user.id },
+        { onConflict: "lesson_id,student_id" },
+      );
+      if (error) {
+        toast.error("Could not save your lesson progress.");
+        return;
+      }
+
+      setDone(true);
+      onComplete?.();
+      toast.success("Lecture marked complete.");
+      router.refresh();
+    } catch (error: unknown) {
+      console.error("Unable to save lesson progress", error);
+      toast.error("Could not save your lesson progress.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button type="button" disabled={busy || done} onClick={() => void markComplete()} className="btn-secondary">
+      {done ? <><CheckCircle2 size={14} />Completed</> : busy ? "Saving progress…" : "Mark lecture complete"}
+    </button>
+  );
+}

@@ -7,6 +7,16 @@ export const metadata: Metadata = {
   title: { default: "CampusClass — Academic workspace", template: "%s · CampusClass" },
   description: "A private academic workspace for colleges, faculty and students.",
   applicationName: "CampusClass",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "CampusClass",
+  },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

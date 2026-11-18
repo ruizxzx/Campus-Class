@@ -27,6 +27,11 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Pro
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
+  const answeredCount = questions.filter((question) => {
+    const answer = answers[question.id];
+    return Array.isArray(answer) ? answer.length > 0 : Boolean(answer?.trim());
+  }).length;
+  const progress = questions.length ? (answeredCount / questions.length) * 100 : 0;
 
   if (!isOpen) {
     return (
@@ -97,13 +102,25 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Pro
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" aria-label="Assessment questions">
+      <section className="surface-flat p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold">Your attempt</div>
+            <div className="mt-1 text-[10px] text-[var(--muted)]">{answeredCount} of {questions.length} questions answered</div>
+          </div>
+          <span className="status-pill">{attemptsRemaining} {attemptsRemaining === 1 ? "attempt" : "attempts"} remaining</span>
+        </div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]" role="progressbar" aria-label="Questions answered" aria-valuemin={0} aria-valuemax={questions.length} aria-valuenow={answeredCount}>
+          <div className="h-full rounded-full bg-[var(--green-strong)] transition-[width] duration-150" style={{ width: `${progress}%` }} />
+        </div>
+      </section>
       {questions.map((q, idx) => {
         const rawOptions = Array.isArray(q.options) ? q.options : [];
         const currentAnswer = answers[q.id];
         const selectedValues = Array.isArray(currentAnswer) ? currentAnswer : [];
         return (
-          <article key={q.id} className="surface p-5">
+          <article key={q.id} className="surface p-5 sm:p-6">
             <div className="flex items-center justify-between text-xs font-semibold text-[var(--muted)]">
               <span>Question {idx + 1}</span>
               <span className="rounded-lg bg-[var(--surface-2)] px-2 py-1 text-[10px]">{q.marks} {q.marks === 1 ? "mark" : "marks"}</span>
@@ -113,9 +130,10 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Pro
             {q.question_type === "short_answer" ? (
               <input
                 type="text"
-                className="input mt-3"
+                className="input-base mt-3"
                 maxLength={5000}
-                placeholder="Type your answer…"
+                aria-label={`Your answer to question ${idx + 1}`}
+                placeholder="Write your answer…"
                 value={typeof answers[q.id] === "string" ? answers[q.id] : ""}
                 onChange={(e) => handleSelect(q.id, e.target.value)}
               />
@@ -195,7 +213,8 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Pro
         );
       })}
 
-      <div className="flex justify-end pt-2">
+      <div className="surface-flat flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <span className="text-[11px] text-[var(--muted)]">Review your answers before submitting.</span>
         <button
           type="submit"
           disabled={submitting}

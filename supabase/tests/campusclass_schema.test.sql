@@ -1,6 +1,6 @@
 -- Structural regression checks. Run with: supabase test db
 begin;
-select plan(109);
+select plan(155);
 
 select has_table('public', 'colleges', 'colleges table exists');
 select has_table('public', 'profiles', 'profiles table exists');
@@ -108,12 +108,66 @@ select ok((select qual ilike '%opens_at%' and qual ilike '%closes_at%' from pg_p
 select ok((select with_check ilike '%private.can_manage_course%' from pg_policies where schemaname = 'public' and tablename = 'courses' and policyname = 'course managers create courses'), 'course writes use the subject-scoped manager check');
 select ok((select prosrc ilike '%c.subject_id = _subject_id%' from pg_proc where oid = 'private.can_manage_course(uuid,uuid)'::regprocedure), 'course faculty permissions are correlated to the target subject');
 select ok(not has_column_privilege('authenticated', 'public.class_messages', 'class_id', 'UPDATE'), 'chat updates cannot move messages between classes');
+select has_table('public', 'class_message_reactions', 'class message reactions table exists');
+select has_table('public', 'class_chat_read_state', 'per-user chat read state exists');
+select ok((select relrowsecurity from pg_class where oid = 'public.class_message_reactions'::regclass), 'RLS is enabled for chat reactions');
+select ok((select relrowsecurity from pg_class where oid = 'public.class_chat_read_state'::regclass), 'RLS is enabled for chat read state');
+select ok(exists (select 1 from pg_constraint where conrelid = 'public.class_messages'::regclass and conname = 'class_messages_parent_same_room_fkey'), 'chat replies cannot cross class sections');
+select ok(not has_column_privilege('authenticated', 'public.class_messages', 'attachment_path', 'UPDATE'), 'clients cannot redirect chat attachment paths');
+select ok(not has_column_privilege('authenticated', 'public.class_messages', 'attachment_ready', 'UPDATE'), 'clients cannot mark unvalidated chat files ready');
+select ok(not has_table_privilege('authenticated', 'public.class_messages', 'INSERT'), 'chat messages can only be created through the validated server route');
+select ok(not has_table_privilege('authenticated', 'public.class_messages', 'DELETE'), 'chat messages cannot be physically deleted through the Data API');
+select ok(not has_column_privilege('authenticated', 'public.class_messages', 'deleted_at', 'UPDATE'), 'clients cannot forge chat deletion timestamps');
+select ok(has_table_privilege('service_role', 'public.class_messages', 'SELECT'), 'server-side chat attachment routes can read message records');
+select ok(has_table_privilege('service_role', 'public.class_messages', 'INSERT'), 'server-side chat attachment routes can create message records');
+select ok(has_column_privilege('service_role', 'public.class_messages', 'deleted_at', 'UPDATE'), 'server-side chat cleanup can soft-delete failed uploads');
+select ok(has_column_privilege('service_role', 'public.class_messages', 'attachment_ready', 'UPDATE'), 'server-side chat uploads can publish validated attachments');
+select ok(to_regprocedure('public.send_class_chat_message(uuid,text,uuid)') is not null, 'authenticated text chat uses the restricted message RPC');
+select ok(has_function_privilege('authenticated', 'public.send_class_chat_message(uuid,text,uuid)', 'EXECUTE'), 'authenticated members can invoke the chat message RPC');
+select ok(not has_function_privilege('anon', 'public.send_class_chat_message(uuid,text,uuid)', 'EXECUTE'), 'anonymous users cannot invoke the chat message RPC');
+select ok((select prosecdef and prosrc ilike '%private.is_class_member(_class_id)%' and prosrc ilike '%classroom.college_id = v_college_id%' from pg_proc where oid = 'public.send_class_chat_message(uuid,text,uuid)'::regprocedure), 'chat message RPC is privileged but restricted to active class members in their college');
+select ok((select qual ilike '%private.is_class_member%' and qual ilike '%attachment_ready%' from pg_policies where schemaname = 'public' and tablename = 'class_messages' and policyname = 'class members read chat'), 'chat reads require class membership and completed attachment validation');
+select ok((select with_check ilike '%private.is_class_member%' and with_check ilike '%attachment_path IS NULL%' from pg_policies where schemaname = 'public' and tablename = 'class_messages' and policyname = 'class members send chat'), 'direct client posts cannot bypass the validated attachment route');
+select ok(has_function_privilege('authenticated', 'public.toggle_class_message_reaction(uuid,text)', 'EXECUTE'), 'class members can toggle protected chat reactions');
+select ok(not has_function_privilege('anon', 'public.toggle_class_message_pin(uuid)', 'EXECUTE'), 'anonymous users cannot pin class chat messages');
+select ok(has_function_privilege('authenticated', 'public.mark_class_chat_read(uuid)', 'EXECUTE'), 'class members can update their own chat read state through the RPC');
+select ok(has_function_privilege('authenticated', 'public.get_my_class_chat_summaries()', 'EXECUTE'), 'members can retrieve their own class chat summaries');
+select ok(not has_table_privilege('anon', 'public.class_message_reactions', 'SELECT'), 'anonymous users cannot read chat reactions');
+select ok(not (select public from storage.buckets where id = 'class-chat'), 'class chat attachments are stored privately');
+select ok(not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and cmd = 'INSERT' and with_check ilike '%class-chat%'), 'clients cannot bypass server-side chat attachment validation');
+select ok((select qual ilike '%private.is_class_member%' and qual ilike '%attachment_ready%' from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'class members read chat attachments'), 'chat downloads require membership and a ready parent message');
+select ok((select prosrc ilike '%class_enrollments%' and prosrc ilike '%class_faculty%' and prosrc ilike '%on conflict%' from pg_proc where oid = 'private.notify_class_chat_recipients()'::regprocedure), 'chat notifications target active section members without duplicate records');
+select ok((select prosrc ilike '%reaction_updated_at%' from pg_proc where oid = 'public.toggle_class_message_reaction(uuid,text)'::regprocedure), 'reaction changes emit room-scoped Realtime updates');
+select ok(not has_function_privilege('anon', 'private.notify_class_chat_recipients()', 'EXECUTE'), 'anonymous users cannot invoke the chat notification trigger function');
+select ok(
+  not exists (select 1 from pg_catalog.pg_publication where pubname = 'supabase_realtime')
+  or exists (select 1 from pg_catalog.pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'class_messages'),
+  'class messages are published to Realtime when the publication is available'
+);
+select ok(
+  not exists (select 1 from pg_catalog.pg_publication where pubname = 'supabase_realtime')
+  or exists (select 1 from pg_catalog.pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'class_message_reactions'),
+  'class message reactions are published to Realtime when the publication is available'
+);
 select ok(not has_column_privilege('authenticated', 'public.class_stream_posts', 'author_id', 'UPDATE'), 'stream updates cannot impersonate another author');
 select ok((select with_check ilike '%lesson.is_published%' from pg_policies where schemaname = 'public' and tablename = 'lesson_progress' and policyname = 'students complete published lessons'), 'students can only complete published lessons');
 select ok(not has_column_privilege('authenticated', 'public.academic_certificates', 'issued_by', 'UPDATE'), 'certificate issuer identity is immutable');
 select ok(not has_column_privilege('authenticated', 'public.student_achievements', 'student_id', 'UPDATE'), 'achievement awards cannot be reassigned to another member');
 select ok(not has_column_privilege('authenticated', 'public.lesson_progress', 'completed_at', 'INSERT'), 'lesson completion timestamps are database-generated');
 select ok((select with_check ilike '%public.class_enrollments%' from pg_policies where schemaname = 'public' and tablename = 'stream_targets' and policyname = 'class managers target enrolled students'), 'stream targets must be enrolled in the post class');
+select ok((select prosrc ilike '%new.visibility%' and prosrc ilike '%stream_targets%' from pg_proc where oid = 'private.notify_stream_post_activity()'::regprocedure), 'targeted stream post notifications only go to intended recipients');
+select ok((select qual ilike '%private.current_role()%' and qual ilike '%private.is_enrolled_in_class%' from pg_policies where schemaname = 'public' and tablename = 'courses' and policyname = 'active courses visible to subject members and managers'), 'student courses require an active subject-class enrollment');
+select ok(has_function_privilege('authenticated', 'public.grade_quiz_attempt(uuid,jsonb,text,boolean)', 'EXECUTE'), 'authenticated faculty can use the protected quiz grading RPC');
+select ok(not has_function_privilege('anon', 'public.grade_quiz_attempt(uuid,jsonb,text,boolean)', 'EXECUTE'), 'anonymous users cannot grade quiz attempts');
+select ok((select prosrc ilike '%private.is_faculty_in_class%' and prosrc ilike '%question_scores%' and prosrc ilike '%released_at%' from pg_proc where oid = 'public.grade_quiz_attempt(uuid,jsonb,text,boolean)'::regprocedure), 'quiz grading validates assigned faculty, question marks, and release state');
+select ok(has_function_privilege('authenticated', 'public.create_quiz_with_questions(uuid,text,text,timestamptz,timestamptz,integer,integer,boolean,boolean,jsonb)', 'EXECUTE'), 'authenticated faculty can create a quiz through the atomic authoring RPC');
+select ok(not has_function_privilege('anon', 'public.create_quiz_with_questions(uuid,text,text,timestamptz,timestamptz,integer,integer,boolean,boolean,jsonb)', 'EXECUTE'), 'anonymous users cannot create assessments');
+select ok((select prosrc ilike '%private.is_faculty_in_class%' and prosrc ilike '%public.quiz_questions%' and prosrc ilike '%v_college_id%' from pg_proc where oid = 'public.create_quiz_with_questions(uuid,text,text,timestamptz,timestamptz,integer,integer,boolean,boolean,jsonb)'::regprocedure), 'quiz authoring validates class assignment and persists questions in the caller college');
+select ok(exists (select 1 from pg_constraint where conrelid = 'public.quiz_attempts'::regclass and conname = 'quiz_attempts_college_id_student_id_fkey' and contype = 'f'), 'quiz attempt student embeds use the tenant-aware profile relationship');
+select ok((select prosrc ilike '%attempt.released_at is not null%' and prosrc not ilike '%show_score_after_submit%' from pg_proc where oid = 'public.get_my_quiz_attempts(uuid)'::regprocedure), 'students only see scores after a result is released');
+select ok((select prosrc ilike '%class_enrollments%' from pg_proc where oid = 'private.notify_quiz_publication()'::regprocedure), 'publishing a quiz notifies active enrolled students');
+select ok(exists (select 1 from storage.buckets where id = 'class-stream' and public = false and file_size_limit = 31457280), 'class stream attachments use a private size-limited storage bucket');
+select ok((select qual ilike '%private.can_view_stream_post%' from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'read authorized class stream attachments'), 'stream attachment downloads require access to their parent post');
 
 select * from finish();
 rollback;

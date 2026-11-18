@@ -65,6 +65,9 @@ Apply all migrations in timestamp order. In addition to the core schema:
 - `supabase/migrations/202611170006_assignment_management_rls.sql` re-scopes faculty assignment-management checks to the current college and refreshes assignment write policies.
 - `supabase/migrations/202611170007_learning_collaboration_hardening.sql` hardens collaboration, quiz, course, lesson-progress, achievement, and certificate permissions; validates and grades quiz answers; tracks daily learning streaks; and adds a score-safe attempt-summary RPC.
 - `supabase/migrations/202611170008_assignment_publishing_rls_repair.sql` reasserts the scoped assignment-management helper, authenticated insert grant, and faculty assignment-publishing policy.
+- `supabase/migrations/202611180015_build_13_activity_notifications.sql` adds idempotent notifications for stream posts/comments and respects selected-student post visibility.
+- `supabase/migrations/202611180016_build_13_learning_workflows.sql` adds private class-stream attachment access, subject-enrollment course visibility, quiz grading/release, and assessment/result notifications.
+- `supabase/migrations/202611180017_quiz_authoring_rpc.sql` adds an authenticated, atomic assessment-and-question authoring RPC with class-assignment checks.
 
 The database trigger only creates a college and administrator profile when a new Auth signup explicitly requests the `college_admin` onboarding flow. Faculty/student accounts are provisioned by a college administrator; role and college membership are assigned server-side.
 
@@ -209,11 +212,11 @@ This build brings together the academic workflow foundation from CampusClass wit
 - The build intentionally excludes creator course sales, marketplace checkout, Stripe Connect instructor payouts, school-subdomain storefronts, and unrelated consumer monetization.
 
 ### Feature expansion
-- **Class activity stream:** class-specific announcements, questions, assignment/material post types, pinning, scheduled publication fields, topics, comments and private faculty/student feedback threads.
+- **Class activity stream:** class-specific posts, pinning, selected-student targeting, validated attachments, comments, filtering and pagination. Scheduled publication, realtime and post editing remain incomplete.
 - **Class chat:** college/class scoped messages with Supabase RLS; realtime-ready table.
 - **Study workspace:** personal private notes and assignment to-do aggregation.
-- **Structured learning:** college-owned courses by subject, modules, lessons, lesson completion and progress tracking.
-- **Assessments:** quiz/exam records, multiple-choice/multi-select/true-false/short-answer question models, attempts and release controls.
+- **Structured learning:** college-owned courses visible to active learners enrolled in a matching subject class, with published lessons, lesson completion, curriculum navigation and supported video embeds. Full course authoring is still partial.
+- **Assessments:** draft/published multi-type quiz authoring, protected attempt submission, server-side grading for objective and manually scored short-answer questions, faculty release, and notifications. Timed autosave/resume and negative marking remain incomplete.
 - **Engagement:** XP/levels/streak data, achievements and college-issued certificates with verification metadata.
 - **Academic experience:** separate dashboards and role-scoped navigation for administrators, faculty and students.
 
@@ -223,4 +226,4 @@ This build brings together the academic workflow foundation from CampusClass wit
 Apply migrations in order. Review policies in a staging Supabase project before production, particularly quiz answer-key visibility and certificate verification policies. `quiz_questions.answer_key` must not be selected by student-facing queries; for high-stakes exams, move answer keys into a non-exposed table and grade through a server-side function before enabling live assessments.
 
 ### Implementation status
-This ZIP contains the schema and core screens for the added modules. The newly added modules require end-to-end testing against a real Supabase project. Quiz-taking/automatic grading UI, certificate PDF rendering, scheduled stream publication worker, realtime subscription wiring, rich-text authoring UI, and the complete AI tutor are not represented as production-complete features yet. They are explicitly tracked as follow-up implementation work rather than simulated with fake data.
+Build 1.3 adds the workflows above but is not production-certified. Apply migrations in timestamp order and complete the two-college role/RLS and private-storage tests before release. See `BUILD_NOTES_1.3.md` for verified command results and remaining gaps. Certificate PDF rendering, scheduled stream publication, realtime wiring, full rich-text authoring and the AI tutor remain follow-up work.

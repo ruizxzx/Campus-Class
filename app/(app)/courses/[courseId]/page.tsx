@@ -1,2 +1,108 @@
-import {requireProfile} from "@/lib/auth";import {createClient} from "@/lib/supabase/server";import {PageHeader,EmptyState} from "@/components/ui";import {LessonCompleteButton} from "@/components/lesson-complete-button";
-export default async function CourseDetail({params}:{params:Promise<{courseId:string}>}){const {courseId}=await params;const profile=await requireProfile();const db=await createClient();const {data:courseRaw,error}=await db.from("courses").select("id,title,description,subjects(name,code),course_modules(id,title,description,position,course_lessons(id,title,plain_text,video_url,duration_minutes,position,is_published))").eq("id",courseId).single();const course: any = courseRaw;if(error||!course)return <EmptyState title="Course not found" description="This course may be unavailable to your college account."/>;const lessons=(course.course_modules??[]).flatMap((m:any)=>(m.course_lessons??[]).filter((l:any)=>l.is_published).map((l:any)=>({...l,module:m.title})));const {data:progress}=lessons.length?await db.from("lesson_progress").select("lesson_id").eq("student_id",profile.id).in("lesson_id",lessons.map((l:any)=>l.id)):{data:[] as any[]};const completed=new Set((progress??[]).map(p=>p.lesson_id));return <><PageHeader title={course.title} description={`${course.subjects?.code??""} · ${course.subjects?.name??""} · ${completed.size}/${lessons.length} lessons completed`}/><p className="mb-4 text-sm text-[var(--muted)]">{course.description}</p><div className="space-y-3">{lessons.map((l:any)=><article key={l.id} className="surface p-5"><div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">{l.module}{l.duration_minutes?` · ${l.duration_minutes} min`:""}</div><h2 className="mt-1 font-semibold">{l.title}</h2><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--muted)]">{l.plain_text}</p>{l.video_url?<a href={l.video_url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs text-[var(--green-strong)]">Open lesson video</a>:null}{profile.role==="student"?<div className="mt-4"><LessonCompleteButton lessonId={l.id} completed={completed.has(l.id)}/></div>:null}</article>)}</div></>}
+import { requireProfile } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { EmptyState } from "@/components/ui";
+import { LearningHubHeader } from "@/components/learning-hub-header";
+import { CourseLearningViewer, type LearningModule } from "@/components/course-learning-viewer";
+import { AISummarizeButton } from "@/components/ai-summarize-button";
+import { AIResourceAssistant } from "@/components/ai-resource-assistant";
+
+type CourseLesson = {
+  id: string;
+  title: string;
+  plain_text: string | null;
+  video_url: string | null;
+  duration_minutes: number | null;
+  position: number;
+  is_published: boolean;
+};
+
+type CourseModule = {
+  id: string;
+  title: string;
+  description: string | null;
+  position: number;
+  course_lessons: CourseLesson[] | null;
+};
+
+type CourseDetailRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  subjects: { name: string; code: string } | { name: string; code: string }[] | null;
+  course_modules: CourseModule[] | null;
+};
+
+export default async function CourseDetail({ params }: { params: Promise<{ courseId: string }> }) {
+  const { courseId } = await params;
+  const profile = await requireProfile();
+  const db = await createClient();
+  const { data: courseRaw, error } = await db.from("courses")
+    .select("id,title,description,status,subjects(name,code),course_modules(id,title,description,position,course_lessons(id,title,plain_text,video_url,duration_minutes,position,is_published))")
+    .eq("id", courseId)
+    .maybeSingle();
+  if (error) {
+    console.error("Unable to load course curriculum", error);
+    throw new Error("Unable to load this course.");
+  }
+  if (!courseRaw) return <EmptyState title="Course not found" description="This course may be unavailable to your college account." />;
+
+  // Keep the embedded PostgREST relation shape explicit for this curriculum query.
+  const course = courseRaw as CourseDetailRow;
+  const subject = Array.isArray(course.subjects) ? course.subjects[0] : course.subjects;
+  const modules = (course.course_modules ?? []).slice().sort((a, b) => a.position - b.position);
+  const visibleModules: LearningModule[] = modules.map((module) => ({
+    id: module.id,
+    title: module.title,
+    description: module.description,
+    lessons: (module.course_lessons ?? [])
+      .filter((lesson) => profile.role !== "student" || lesson.is_published)
+      .sort((a, b) => a.position - b.position),
+  }));
+  const visibleLessonIds = visibleModules.flatMap((module) => module.lessons.map((lesson) => lesson.id));
+  const progressResult = profile.role === "student" && visibleLessonIds.length
+    ? await db.from("lesson_progress").select("lesson_id").eq("student_id", profile.id).in("lesson_id", visibleLessonIds)
+    : { data: [], error: null };
+  if (progressResult.error) {
+    console.error("Unable to load course progress", progressResult.error);
+    throw new Error("Unable to load your course progress.");
+  }
+  const completed = new Set((progressResult.data ?? []).map((item) => item.lesson_id));
+  const totalLessons = visibleLessonIds.length;
+  const totalDuration = visibleModules.reduce((total, module) => total + module.lessons.reduce((subtotal, lesson) => subtotal + (lesson.duration_minutes ?? 0), 0), 0);
+
+  return (
+    <>
+      <LearningHubHeader
+        active="courses"
+        title={course.title}
+        description={`${subject?.code ?? ""}${subject?.code ? " · " : ""}${subject?.name ?? "Course"} · ${modules.length} chapters · ${totalLessons} lectures`}
+        canAuthor={profile.role === "faculty" || profile.role === "admin"}
+      />
+      <section className="surface mb-4 px-5 py-4 sm:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-sm leading-6 text-[var(--muted)]">
+              {course.description || "Follow each chapter at your own pace. Your completed lectures are saved to your learning record."}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {subject?.code ? <span className="status-pill green">{subject.code}</span> : null}
+              <span className="status-pill">{modules.length} {modules.length === 1 ? "chapter" : "chapters"}</span>
+              <span className="status-pill">{totalLessons} {totalLessons === 1 ? "lecture" : "lectures"}</span>
+              {totalDuration > 0 ? <span className="status-pill">{totalDuration} min total</span> : null}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <AISummarizeButton resourceType="course" resourceId={courseId}/>
+            <AIResourceAssistant resourceType="course" resourceId={courseId} compact />
+          </div>
+        </div>
+      </section>
+      <CourseLearningViewer
+        modules={visibleModules}
+        initialCompletedLessonIds={[...completed]}
+        isStudent={profile.role === "student"}
+      />
+    </>
+  );
+}

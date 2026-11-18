@@ -31,18 +31,18 @@ The repository README documents multi-tenant schools, institution theming, cours
 
 A user can belong to a college through an authenticated profile. Every added data table carries `college_id` and relies on RLS. Class-scoped operations must additionally check active student enrollment, assigned faculty membership, or the college administrator role. A class or course ID by itself is never authorization.
 
-`quiz_questions.answer_key` is included in the initial schema to model authoring. Student query paths must never retrieve it. For a production exam, store answers in a private schema/table and grade submissions through a server-side operation. The current migration is a foundation and should not be considered a complete high-stakes examination implementation until that split and corresponding tests are in place.
+`quiz_questions.answer_key` remains in the public schema with column-level access withheld from authenticated clients; student queries must never retrieve it. Quiz submission and faculty grading run through restricted server-side database functions. This is not a high-stakes exam certification: a private answer-key store and behavioral tenant-isolation tests are still required.
 
 ## Not complete / deliberately not claimed
 
-- Rich-text stream/lesson editor UI and image paste/upload.
-- Realtime WebSocket subscription wiring for chat and stream.
-- Quiz editor, timer, attempt controls, grading, anti-cheating safeguards and grade release.
+- Stream edit/delete, topic authoring, scheduled publishing and realtime subscription wiring.
+- Full course authoring, reordering, lesson material uploads and rich-text lesson editor.
+- Durable quiz autosave/resume, server-enforced timed attempts, negative marking and anti-cheating safeguards.
 - Scheduled post publishing worker.
 - Certificate PDF generation, public verification API and revocation UI.
 - Full achievement-awarding triggers and leaderboards.
 - AI tutor/MCP service and institutional data governance.
 - i18n locale bundles.
-- Full end-to-end tenant-isolation suite for the new tables.
+- Full end-to-end two-college tenant-isolation and private-storage suite for the new workflows.
 
 These are recorded as follow-up tasks rather than represented as completed functionality.

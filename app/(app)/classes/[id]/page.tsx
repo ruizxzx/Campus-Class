@@ -21,7 +21,7 @@ export default async function StudentClassDetailPage({ params }: { params: Promi
 
   const { data: clsRaw } = await supabase
     .from("classes")
-    .select("id,section,semester,academic_year,subjects(name,code,departments(name))")
+    .select("id,subject_id,section,semester,academic_year,subjects(name,code,departments(name))")
     .eq("id", id)
     .single();
   const cls: any = clsRaw;
@@ -43,7 +43,22 @@ export default async function StudentClassDetailPage({ params }: { params: Promi
       description={`${cls.subjects?.departments?.name ?? "College"} · ${cls.subjects?.code ?? ""} · Semester ${cls.semester} · ${cls.academic_year}`}
       action={<LeaveClassButton enrollmentId={enrollment.id} />}
     />
-    <section className="surface mb-5 p-5">
+    <nav className="mb-5 flex gap-2 overflow-x-auto pb-1" aria-label="Classroom sections">
+      {[
+        { label: "Overview", href: `/classes/${id}` },
+        { label: "Stream", href: `/stream?class=${id}` },
+        { label: "Classwork", href: `/assignments?class=${id}` },
+        { label: "Courses", href: `/courses?subject=${cls.subject_id}` },
+        { label: "People", href: "#people" },
+        { label: "Resources", href: `/stream?class=${id}&type=material` },
+        { label: "Chat", href: `/chat?class=${id}` },
+      ].map((item) => (
+        <Link key={item.label} href={item.href} className="btn-secondary shrink-0 !px-3 !py-2 text-xs">
+          {item.label}
+        </Link>
+      ))}
+    </nav>
+    <section id="people" className="surface mb-5 p-5">
       <div className="flex items-center gap-2 text-sm font-semibold"><Users size={16} />Teaching faculty</div>
       <div className="mt-3 flex flex-wrap gap-2">
         {faculty?.length ? faculty.map((teacher) => (
