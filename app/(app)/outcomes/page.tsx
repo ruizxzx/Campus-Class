@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
 import { OutcomeDashboard } from "@/components/outcome-dashboard";
+import { bestReleasedQuizScores, collectEvidence, releasedAssignmentMarks } from "@/lib/academic-evidence";
 
 export const dynamic = "force-dynamic";
 export default async function OutcomesPage({ searchParams }: { searchParams: Promise<{ class_id?: string }> }) {
@@ -44,34 +45,43 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
   const assignmentIds = (assignmentResponse.data ?? []).map((item) => item.id);
   const quizIds = (quizResponse.data ?? []).map((item) => item.id);
   const [subsResult,quizScoresResult] = await Promise.all([
-    assignmentIds.length ? db.from("assignment_submissions").select("id,assignment_id,student_id,version")
-      .eq("college_id", collegeId).in("assignment_id", assignmentIds).limit(5000)
-      : Promise.resolve({data:[],error:null}),
-    quizIds.length ? db.from("quiz_attempts").select("quiz_id,student_id,score,released_at")
-      .eq("college_id", collegeId).in("quiz_id",quizIds).not("released_at","is",null).limit(5000)
-      : Promise.resolve({data:[],error:null}),
+    collectEvidence<{id:string;assignment_id:string;student_id:string;version:number}>(assignmentIds,
+      async(batch,from,to)=>db.from("assignment_submissions")
+        .select("id,assignment_id,student_id,version").eq("college_id",collegeId)
+        .in("assignment_id",batch).order("id").range(from,to)),
+    collectEvidence<{id:string;quiz_id:string;student_id:string;score:number|null;released_at:string|null}>(quizIds,
+      async(batch,from,to)=>db.from("quiz_attempts")
+        .select("id,quiz_id,student_id,score,released_at").eq("college_id",collegeId)
+        .in("quiz_id",batch).not("released_at","is",null).order("id").range(from,to)),
   ]);
-  if (subsResult.error || quizScoresResult.error) throw new Error("Cannot load published assessment results.");
-  const submissionIds = (subsResult.data ?? []).map((item) => item.id);
-  const { data: evaluations, error: evalError } = submissionIds.length
-    ? await db.from("assignment_evaluations").select("submission_id,marks,released_at")
-      .eq("college_id",collegeId).in("submission_id",submissionIds).not("released_at","is",null).limit(5000)
-    : { data:[],error:null };
-  if (evalError) throw new Error("Unable to load released evaluations.");
+  if(subsResult.error||quizScoresResult.error||subsResult.truncated||quizScoresResult.truncated
+     ||(outcomeResponse.data?.length??0)>=100||(assignmentResponse.data?.length??0)>=100
+     ||(quizResponse.data?.length??0)>=100||(allMappings?.length??0)>=300)
+    throw new Error("Outcome evidence was incomplete. Increase pagination before interpreting scores.");
 
-  const assessmentAverages = new Map<string,number>();
-  for (const assignment of assignmentResponse.data ?? []) {
-    const latest = new Map<string,{ id:string; version:number }>();
-    for (const sub of subsResult.data ?? []) if(sub.assignment_id === assignment.id && (!latest.has(sub.student_id) || (latest.get(sub.student_id)?.version ?? -1) < sub.version)) {
-      latest.set(sub.student_id,{ id:sub.id, version:sub.version });
-    }
-    const marks = new Map((evaluations ?? []).map((item)=>[item.submission_id,Number(item.marks)]));
-    const values = [...latest.values()].map((item)=>marks.get(item.id)).filter((value):value is number=>value !== undefined);
-    if (values.length && Number(assignment.max_marks)>0) assessmentAverages.set("assignment:"+assignment.id,values.reduce((a,b)=>a+b,0)/values.length/Number(assignment.max_marks)*100);
+  const submissionIds=subsResult.data.map((row)=>row.id);
+  const evaluationResult=await collectEvidence<{id:string;submission_id:string;marks:number;released_at:string|null}>(
+    submissionIds,async(batch,from,to)=>db.from("assignment_evaluations")
+      .select("id,submission_id,marks,released_at").eq("college_id",collegeId)
+      .in("submission_id",batch).not("released_at","is",null).order("id").range(from,to));
+  if(evaluationResult.error||evaluationResult.truncated) throw new Error("Outcome evaluations were incomplete.");
+
+  const assignmentScores=releasedAssignmentMarks(subsResult.data,evaluationResult.data);
+  const quizScores=bestReleasedQuizScores(quizScoresResult.data);
+  const assessmentAverages=new Map<string,number>();
+  for (const assessment of assignmentResponse.data??[]) {
+    const prefix=assessment.id+":";
+    const values=[...assignmentScores.entries()].filter(([key])=>key.startsWith(prefix)).map(([,score])=>score);
+    if(values.length&&Number(assessment.max_marks)>0)
+      assessmentAverages.set("assignment:"+assessment.id,
+        Math.min(100,values.reduce((sum,score)=>sum+score,0)/values.length/Number(assessment.max_marks)*100));
   }
-  for (const quiz of quizResponse.data ?? []) {
-    const values = (quizScoresResult.data ?? []).filter((item)=>item.quiz_id===quiz.id && item.score!==null).map((item)=>Number(item.score));
-    if(values.length && Number(quiz.max_marks)>0) assessmentAverages.set("quiz:"+quiz.id,values.reduce((a,b)=>a+b,0)/values.length/Number(quiz.max_marks)*100);
+  for (const assessment of quizResponse.data??[]) {
+    const prefix=assessment.id+":";
+    const values=[...quizScores.entries()].filter(([key])=>key.startsWith(prefix)).map(([,score])=>score);
+    if(values.length&&Number(assessment.max_marks)>0)
+      assessmentAverages.set("quiz:"+assessment.id,
+        Math.min(100,values.reduce((sum,score)=>sum+score,0)/values.length/Number(assessment.max_marks)*100));
   }
   const outcomes = (outcomeResponse.data ?? []).map((item)=>{
     const mappings = (allMappings ?? []).filter((mapping)=>mapping.outcome_id===item.id).map((mapping)=>{

@@ -4,31 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
 import { StudentSuccessDashboard } from "@/components/student-success-dashboard";
 import { summarizeStudent, releasedQuizEvidence } from "@/lib/student-success";
+import { collectEvidence } from "@/lib/academic-evidence";
 
-
-// PostgREST is often configured to cap a response at 1,000 rows. Page through
-// the selected class only, never infer student support signals from truncated
-// college-wide arrays. Stop rather than silently calculate partial evidence.
-type EvidencePage<T> = { data: T[] | null; error: { code: string } | null };
-async function collectEvidence<T>(
-  ids: string[],
-  fetchPage: (batch: string[], from: number, to: number) => Promise<EvidencePage<T>>,
-): Promise<{ data: T[]; error: { code: string } | null; truncated: boolean }> {
-  const rows: T[] = [];
-  for (let index = 0; index < ids.length; index += 50) {
-    const batch = ids.slice(index, index + 50);
-    let ended = false;
-    for (let offset = 0; offset < 50000; offset += 1000) {
-      const result = await fetchPage(batch, offset, offset + 999);
-      if (result.error) return { data: rows, error: result.error, truncated: false };
-      const batchRows = result.data ?? [];
-      rows.push(...batchRows);
-      if (batchRows.length < 1000) { ended = true; break; }
-    }
-    if (!ended) return { data: rows, error: null, truncated: true };
-  }
-  return { data: rows, error: null, truncated: false };
-}
 
 export const dynamic = "force-dynamic";
 

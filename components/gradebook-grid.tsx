@@ -14,6 +14,13 @@ export function GradebookGrid({ classes, classId, columns, rows, staff }: {
     columns[index]?.maxMarks > 0 ? Math.min(100,score / columns[index].maxMarks * 100) : null))
     .filter((item): item is number => item !== null);
   const overall = avg.length ? Math.round(avg.reduce((a,b)=>a+b,0) / avg.length) : null;
+  const learnerAverage = (row: Row) => {
+    const scores=row.scores.flatMap((score,index)=>{
+      const max=columns[index]?.maxMarks;
+      return score!==null && max>0 ? [Math.min(100,score/max*100)] : [];
+    });
+    return scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : null;
+  };
 
   function exportCsv() {
     const clean = (cell: string | number) => {
@@ -23,8 +30,8 @@ export function GradebookGrid({ classes, classId, columns, rows, staff }: {
       return '"' + safe.replaceAll('"','""') + '"';
     };
     const lines = [
-      ["Student","Attendance %",...columns.map((item) => item.title + " (" + item.maxMarks + ")")],
-      ...rows.map((row) => [row.name, row.attendance ?? "—",...row.scores.map((item) => item ?? "—")]),
+      ["Student","Attendance %","Released average %",...columns.map((item) => item.title + " (" + item.maxMarks + ")")],
+      ...rows.map((row) => [row.name, row.attendance ?? "—",learnerAverage(row) ?? "—",...row.scores.map((item) => item ?? "—")]),
     ].map((items) => items.map((item) => clean(item)).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([lines],{type:"text/csv;charset=utf-8"}));
     const link = document.createElement("a"); link.href=url; link.download="campusclass-gradebook.csv";
@@ -47,8 +54,8 @@ export function GradebookGrid({ classes, classId, columns, rows, staff }: {
         </div>
       </div>
       <div className="table-wrap"><table className="table-base min-w-[540px]">
-        <thead><tr><th>Student</th><th>Attendance</th>{columns.map((column) => <th key={column.key}><div className="max-w-44 whitespace-normal">{column.title}</div><span className="text-[10px] font-normal capitalize">{column.type} · /{column.maxMarks}</span></th>)}</tr></thead>
-        <tbody>{rows.map((row) => <tr key={row.id}><td className="font-semibold">{row.name}</td><td>{row.attendance === null ? "—" : row.attendance + "%"}</td>{columns.map((column,index) => <td key={column.key} className="tabular-nums">{row.scores[index] === null ? "—" : row.scores[index]}</td>)}</tr>)}</tbody>
+        <thead><tr><th>Student</th><th>Attendance</th><th>Released average</th>{columns.map((column) => <th key={column.key}><div className="max-w-44 whitespace-normal">{column.title}</div><span className="text-[10px] font-normal capitalize">{column.type} · /{column.maxMarks}</span></th>)}</tr></thead>
+        <tbody>{rows.map((row) => <tr key={row.id}><td className="font-semibold">{row.name}</td><td>{row.attendance === null ? "—" : row.attendance + "%"}</td><td>{learnerAverage(row) === null ? "—" : learnerAverage(row) + "%"}</td>{columns.map((column,index) => <td key={column.key} className="tabular-nums">{row.scores[index] === null ? "—" : row.scores[index]}</td>)}</tr>)}</tbody>
       </table>{rows.length === 0 && <p className="p-6 text-sm text-[var(--muted)]">No students are enrolled in this class.</p>}</div>
     </section>
     <div className="flex items-start gap-2 text-xs leading-6 text-[var(--muted)]"><ShieldCheck size={17} className="shrink-0"/>Official marks are released by authorized faculty. Missing grades are displayed as unavailable, not as failures.</div>
