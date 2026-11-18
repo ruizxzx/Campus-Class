@@ -76,6 +76,26 @@ export async function completeWithOpenRouter(
     throw new OpenRouterError("CampusClass AI is not enabled for this college. Contact your college administrator.", 503);
   }
 
+  // The quota RPC is atomic across all Next.js instances and routes.
+  // Fail closed if its migration is missing rather than spending provider credits
+  // without a server-enforced budget.
+  if (messages.length > 24 || messages.some((message) => message.content.length > 24000)
+    || messages.reduce((total, message) => total + message.content.length, 0) > 48000
+    || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 2400) {
+    throw new OpenRouterError("The AI request exceeds the supported context limit.", 400);
+  }
+  const { data: withinQuota, error: quotaError } = await admin.rpc("consume_ai_request_quota", {
+    p_college_id: profile.college_id,
+    p_user_id: profile.id,
+  });
+  if (quotaError) {
+    console.error("AI request quota could not be checked", { code: quotaError.code });
+    throw new OpenRouterError("AI request protection is unavailable. Apply the 202611180030 AI quota migration.", 503);
+  }
+  if (withinQuota !== true) {
+    throw new OpenRouterError("Your hourly AI request limit has been reached. Try again next hour.", 429);
+  }
+
   const secret = decryptOpenRouterKey(
     settings.api_key_ciphertext,
     settings.api_key_iv,

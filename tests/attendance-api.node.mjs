@@ -12,7 +12,7 @@ const compiled = ts.transpileModule(readFileSync(new URL("../app/api/attendance/
 const validToken = "valid-attendance-code-value";
 const tokenHash = createHash("sha256").update(validToken).digest("hex");
 
-function harness({role="student",assigned=true,enrolled=true,closed=false,expired=false,duplicate=false}={}) {
+function harness({role="student",assigned=true,enrolled=true,closed=false,expired=false,duplicate=false,dbRejected=false}={}) {
   const calls=[];
   const session={id:"attendance-session",class_id:"class-1",college_id:"college-1",token_hash:tokenHash,
     closed_at:closed?"2026-01-01":null,
@@ -34,7 +34,7 @@ function harness({role="student",assigned=true,enrolled=true,closed=false,expire
         calls.push("insert:"+table);
         if(table==="attendance_records"){
           assert.equal(data.student_id,"student");
-          return{error:duplicate?{code:"23505"}:null};
+          return{error:duplicate?{code:"23505"}:dbRejected?{code:"23P01"}:null};
         }
         return{data:{id:"new-session",title:data.title,expires_at:data.expires_at},error:null};
       },
@@ -79,4 +79,11 @@ test("duplicate attendance check-in is idempotent",async()=>{
 test("faculty not assigned to class cannot generate QR",async()=>{
   const api=harness({role:"faculty",assigned:false}),result=await api.post({action:"create",class_id:"class-1",title:"Lecture",minutes:5});
   assert.equal(result.status,403);assert.equal(api.calls.includes("insert:attendance_sessions"),false);
+});
+
+test("database clock rejects a QR check-in that expires during an in-flight request",async()=>{
+  const api=harness({dbRejected:true});
+  const response=await api.post({action:"checkin",session_id:"session",token:validToken});
+  assert.equal(response.status,409);
+  assert.match(response.body.error,/closed or expired/i);
 });

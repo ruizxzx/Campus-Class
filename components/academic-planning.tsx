@@ -61,7 +61,8 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
     const result = await response.json();
     if (!response.ok) toast.error(result.error ?? "Could not delete the syllabus.");
     else {
-      toast.success("Syllabus removed.");
+      if (result.storageCleanupPending) toast.warning("Syllabus removed from the class. Storage cleanup requires administrator attention.");
+      else toast.success("Syllabus removed.");
       router.refresh();
     }
   }

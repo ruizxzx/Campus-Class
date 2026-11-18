@@ -84,7 +84,7 @@ select ok((select prosrc ilike '%jsonb_each%' from pg_proc where oid = 'public.s
 select ok((select prosrc ilike '%v_total_score%' and prosrc ilike '%last_activity_date%' from pg_proc where oid = 'public.submit_quiz_attempt(uuid,jsonb)'::regprocedure), 'quiz submission retains grading and updates daily learning streaks');
 select ok((select prosrc ilike '%scheduled_at <= now()%' from pg_proc where oid = 'private.can_view_stream_post(uuid)'::regprocedure), 'scheduled stream posts stay hidden until publication time');
 select ok(has_function_privilege('authenticated', 'private.can_view_stream_post(uuid)', 'EXECUTE'), 'stream visibility helper is executable by authenticated RLS policies');
-select ok(has_function_privilege('authenticated', 'public.submit_quiz_attempt(uuid,jsonb)', 'EXECUTE'), 'students can submit attempts only through the restricted server-side function');
+select ok(not has_function_privilege('authenticated', 'public.submit_quiz_attempt(uuid,jsonb)', 'EXECUTE'), 'legacy quiz submission bypass is disabled; students must use guarded v2 RPC');
 select ok(not has_table_privilege('authenticated', 'public.student_learning_stats', 'INSERT'), 'students cannot insert learning statistics');
 select ok(not has_table_privilege('authenticated', 'public.student_learning_stats', 'UPDATE'), 'students cannot update learning statistics');
 select ok(not has_table_privilege('authenticated', 'public.student_learning_stats', 'DELETE'), 'students cannot delete learning statistics');
