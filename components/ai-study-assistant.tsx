@@ -14,11 +14,12 @@ const suggestedQuestions = [
   "Help me understand my class syllabus.",
 ];
 
-export function AIStudyAssistant() {
+export function AIStudyAssistant({ syllabi }: { syllabi: { id:string; title:string; class_id:string }[] }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<"chat" | "practice" | "revision">("chat");
+  const [syllabusId, setSyllabusId] = useState("");
 
   async function ask(event: React.FormEvent) {
     event.preventDefault();
@@ -32,7 +33,7 @@ export function AIStudyAssistant() {
       const response = await fetch("/api/ai/study-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: text, history, mode }),
+        body: JSON.stringify({ question: text, history, mode, syllabus_id: syllabusId || null }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "The study assistant could not answer.");
@@ -74,11 +75,19 @@ export function AIStudyAssistant() {
         {([{ value:"chat", label:"Ask and explain" },{ value:"practice", label:"Practice quiz" },{ value:"revision", label:"7-day revision plan" }] as const).map((item) =>
           <button key={item.value} type="button" aria-pressed={mode===item.value} onClick={() => { setMode(item.value); setQuestion(item.value==="practice" ? "Create practice questions from my published course material." : item.value==="revision" ? "Plan my revision for the coming week." : ""); }} className={"rounded-full border px-3 py-2 text-xs font-semibold transition-colors " + (mode===item.value ? "border-[var(--green)] bg-[var(--green-soft)] text-[var(--green-strong)]" : "border-[var(--line)]")}>{item.label}</button>)}
       </div>
+      {syllabi.length>0&&<label className="mb-3 block text-[11px] font-medium">
+        Study a full syllabus PDF (optional)
+        <select className="input-base mt-1" value={syllabusId} onChange={(event)=>setSyllabusId(event.target.value)}>
+          <option value="">Use published lessons and outlines</option>
+          {syllabi.map((item)=><option key={item.id} value={item.id}>{item.title}</option>)}
+        </select>
+        <span className="mt-1 block text-[10px] text-[var(--muted)]">When selected, the private PDF is sent to the configured AI provider for this question.</span>
+      </label>}
       <div className="flex items-end gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-2 focus-within:border-[var(--green)]">
         <textarea className="max-h-32 min-h-11 flex-1 resize-y bg-transparent px-2 py-2 text-sm outline-none placeholder:text-[var(--muted)]" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={4000} placeholder="Ask about your classes or pending work…" aria-label="Ask the study assistant"/>
         <button className="btn-primary !h-10 !w-10 !shrink-0 !justify-center !p-0" disabled={sending || !question.trim()} aria-label="Send question"><ArrowUp size={17}/></button>
       </div>
-      <p className="mt-2 px-1 text-[9px] leading-4 text-[var(--muted)]">AI can make mistakes. Citations refer to published lesson text and syllabus outlines, not full PDFs unless their content is provided as an outline. Relevant content is processed by your college’s configured AI provider.</p>
+      <p className="mt-2 px-1 text-[9px] leading-4 text-[var(--muted)]">AI can make mistakes. Citations refer to published lesson text and syllabus outlines. When selected above, the full PDF is provided to the model for that request. Relevant content is processed by your college’s configured AI provider.</p>
     </form>
   </section>;
 }

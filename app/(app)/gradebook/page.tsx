@@ -3,6 +3,8 @@ import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
 import { GradebookGrid } from "@/components/gradebook-grid";
+import { bestReleasedQuizScores, collectEvidence, releasedAssignmentMarks } from "@/lib/academic-evidence";
+import type { GradeWeights } from "@/lib/gradebook-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +15,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   const membership = profile.role === "admin"
     ? null
     : profile.role === "faculty"
-      ? await db.from("class_faculty").select("class_id").eq("college_id", collegeId).eq("faculty_id", profile.id)
+      ? await db.from("class_faculty").select("class_id,can_manage_assignments").eq("college_id", collegeId).eq("faculty_id", profile.id)
       : await db.from("class_enrollments").select("class_id").eq("college_id", collegeId).eq("student_id", profile.id).eq("status", "active");
   if (membership?.error) throw new Error("Unable to verify class membership.");
   const permittedIds = membership?.data?.map((row) => row.class_id) ?? [];
@@ -52,29 +54,52 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
     ids.length
       ? db.from("profiles").select("id,full_name").eq("college_id", collegeId).in("id", ids).limit(1000)
       : Promise.resolve({ data: [], error: null }),
-    assignmentIds.length && ids.length
-      ? db.from("assignment_submissions").select("id,assignment_id,student_id,version,status").eq("college_id", collegeId)
-          .in("assignment_id", assignmentIds).in("student_id", ids).limit(5000)
-      : Promise.resolve({ data: [], error: null }),
-    quizIds.length && ids.length
-      ? db.from("quiz_attempts").select("id,quiz_id,student_id,score,released_at,status").eq("college_id", collegeId)
-          .in("quiz_id", quizIds).in("student_id", ids).limit(5000)
-      : Promise.resolve({ data: [], error: null }),
-    sessionIds.length && ids.length
-      ? db.from("attendance_records").select("student_id,session_id,status").eq("college_id", collegeId)
-          .in("session_id", sessionIds).in("student_id", ids).limit(5000)
-      : Promise.resolve({ data: [], error: null }),
+    collectEvidence<{ id:string; assignment_id:string; student_id:string; version:number }>(assignmentIds, async (batch,from,to) =>
+      db.from("assignment_submissions").select("id,assignment_id,student_id,version").eq("college_id",collegeId)
+        .in("assignment_id",batch).in("student_id",ids).order("id").range(from,to)),
+    collectEvidence<{ id:string; quiz_id:string; student_id:string; score:number|null; released_at:string|null }>(quizIds, async (batch,from,to) =>
+      db.from("quiz_attempts").select("id,quiz_id,student_id,score,released_at").eq("college_id",collegeId)
+        .in("quiz_id",batch).in("student_id",ids).order("id").range(from,to)),
+    collectEvidence<{ id:string; student_id:string; session_id:string; status:string }>(sessionIds, async (batch,from,to) =>
+      db.from("attendance_records").select("id,student_id,session_id,status").eq("college_id",collegeId)
+        .in("session_id",batch).in("student_id",ids).order("id").range(from,to)),
   ]);
-  if (profilesResult.error || submissionResult.error || attemptsResult.error || attendanceResult.error) {
-    throw new Error("Unable to load gradebook records.");
+  if (profilesResult.error || submissionResult.error || attemptsResult.error || attendanceResult.error
+      || submissionResult.truncated || attemptsResult.truncated || attendanceResult.truncated
+      || (roster.data?.length ?? 0)>=1000 || (assignmentResult.data?.length ?? 0)>=100
+      || (quizResult.data?.length ?? 0)>=100 || (sessionsResult.data?.length ?? 0)>=500) {
+    throw new Error("Gradebook dataset incomplete: check database permissions or pagination limits.");
   }
-  const submissions = submissionResult.data ?? [];
-  const submissionIds = submissions.map((item) => item.id);
-  const { data: evaluations, error: evalError } = submissionIds.length
-    ? await db.from("assignment_evaluations").select("submission_id,marks,released_at").eq("college_id", collegeId).in("submission_id", submissionIds).limit(5000)
-    : { data: [], error: null };
-  if (evalError) throw new Error("Unable to load gradebook evaluations.");
-  const evaluationMap = new Map((evaluations ?? []).map((evaluation) => [evaluation.submission_id, evaluation]));
+  // Explicit per-class grading policy is optional. Without it we display
+  // descriptive recorded-score averages, never invent an official weighting.
+  const { data: policyRow, error: policyError } = await db.from("class_gradebook_policies")
+    .select("assignment_weight,project_weight,quiz_weight,attendance_weight")
+    .eq("college_id", collegeId).eq("class_id", classId).maybeSingle();
+  const missingPolicyTable = policyError?.code === "PGRST205"
+    || policyError?.code === "42P01" || policyError?.code === "PGRST116";
+  if (policyError && !missingPolicyTable) {
+    throw new Error("Could not load class grading policy; verify database permissions.");
+  }
+  const gradeWeights: GradeWeights | null = policyRow ? {
+    assignment_weight: Number(policyRow.assignment_weight),
+    project_weight: Number(policyRow.project_weight),
+    quiz_weight: Number(policyRow.quiz_weight),
+    attendance_weight: Number(policyRow.attendance_weight),
+  } : null;
+  const canEditPolicy = profile.role === "admin" || (profile.role === "faculty"
+    && (membership?.data ?? []).some((item) => item.class_id === classId
+      && "can_manage_assignments" in item && item.can_manage_assignments === true));
+  const submissions=submissionResult.data;
+  const submissionIds=submissions.map((item)=>item.id);
+  const evaluationResult=await collectEvidence<{ id:string; submission_id:string; marks:number; released_at:string|null }>(
+    submissionIds, async (batch,from,to)=>db.from("assignment_evaluations")
+      .select("id,submission_id,marks,released_at").eq("college_id",collegeId)
+      .in("submission_id",batch).order("id").range(from,to));
+  if (evaluationResult.error || evaluationResult.truncated) {
+    throw new Error("Gradebook evaluation evidence is incomplete.");
+  }
+  const assignmentMarks=releasedAssignmentMarks(submissions,evaluationResult.data);
+  const quizMarks=bestReleasedQuizScores(attemptsResult.data);
   const columns = [
     ...(assignmentResult.data ?? []).map((item) => ({ key: "assignment:" + item.id, title: item.title, type: item.work_type ?? "assignment", maxMarks: Number(item.max_marks) })),
     ...(quizResult.data ?? []).map((item) => ({ key: "quiz:" + item.id, title: item.title, type: "quiz", maxMarks: Number(item.max_marks) })),
@@ -84,15 +109,9 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
     const scores = columns.map((column) => {
       const resourceId = column.key.split(":")[1];
       if (column.key.startsWith("assignment:")) {
-        const versions = submissions.filter((item) => item.student_id === person.id && item.assignment_id === resourceId)
-          .sort((a,b) => b.version - a.version);
-        const evaluation = versions.length ? evaluationMap.get(versions[0].id) : null;
-        if (!evaluation || (profile.role === "student" && !evaluation.released_at)) return null;
-        return Number(evaluation.marks);
+        return assignmentMarks.get(resourceId + ":" + person.id) ?? null;
       }
-      const attempts = (attemptsResult.data ?? []).filter((item) => item.student_id === person.id && item.quiz_id === resourceId
-        && item.score !== null && (profile.role !== "student" || Boolean(item.released_at)));
-      return attempts.length ? Math.max(...attempts.map((item) => Number(item.score))) : null;
+      return quizMarks.get(resourceId + ":" + person.id) ?? null;
     });
     const relevant = (attendanceResult.data ?? []).filter((item) => item.student_id === person.id
       && completedSessions.has(item.session_id) && ["present","late"].includes(item.status));
@@ -101,6 +120,8 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   });
   return <>
     <PageHeader title="Academic gradebook" description="One place for assignment marks, quiz results and attendance. Students only see released grades."/>
-    <GradebookGrid classes={classes} classId={selected.id} columns={columns} rows={people} staff={profile.role !== "student"}/>
+    <GradebookGrid classes={classes} classId={selected.id} columns={columns} rows={people}
+      staff={profile.role !== "student"} weights={gradeWeights}
+      policyAvailable={!missingPolicyTable} canEditPolicy={canEditPolicy}/>
   </>;
 }

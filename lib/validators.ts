@@ -46,7 +46,7 @@ export const streamPostSchema = z.object({
   }
 });
 
-const quizQuestionSchema = z.object({
+export const quizQuestionSchema = z.object({
   question_type: z.enum(["multiple_choice", "multiple_select", "true_false", "short_answer"]),
   prompt: z.string().trim().min(1).max(5000),
   options: z.array(z.string().trim().min(1).max(500)).max(100),
@@ -149,6 +149,7 @@ export const collegeAISettingsSchema = z.object({
 
 export const aiStudyAssistantSchema = z.object({
   mode: z.enum(["chat", "practice", "revision"]).default("chat"),
+  syllabus_id: z.string().uuid().nullable().optional(),
   question: z.string().trim().min(1).max(4000),
   history: z.array(z.object({
     role: z.enum(["user", "assistant"]),

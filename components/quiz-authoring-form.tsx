@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClipboardCheck, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -12,8 +12,12 @@ type QuestionDraft = {
   options: string;
   answer: string;
   marks: string;
+  bankId?: string;
 };
-type ClassItem = { id: string; display_name: string; section: string };
+type ClassItem = { id: string; display_name: string; section: string; subjects?: { id: string } | { id: string }[] | null };
+type BankQuestion = { id: string; prompt: string; question_type: QuestionType; options: string[];
+  answer_key: string | string[] | null; marks: number; difficulty: string; can_manage: boolean };
+
 
 function createQuestion(): QuestionDraft {
   return { type: "multiple_choice", prompt: "", options: "", answer: "", marks: "1" };
@@ -31,7 +35,106 @@ export function QuizAuthoringForm({ classes }: { classes: ClassItem[] }) {
   const [showScore, setShowScore] = useState(false);
   const [publish, setPublish] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [bankItems, setBankItems] = useState<BankQuestion[]>([]);
+  const [bankBusy, setBankBusy] = useState(false);
+  const [bankError, setBankError] = useState("");
+  const [bankFilter, setBankFilter] = useState("");
+  const [bankOffset, setBankOffset] = useState(0);
+  const [bankHasMore, setBankHasMore] = useState(false);
+  const activeSubject=classes.find((item)=>item.id===classId)?.subjects;
+  const subjectId=(Array.isArray(activeSubject)?activeSubject[0]?.id:activeSubject?.id)??"";
+
   const router = useRouter();
+
+  useEffect(() => {
+    setBankItems([]);
+    setBankOffset(0);
+    setBankHasMore(false);
+    setBankError("");
+  }, [subjectId]);
+
+  async function loadBank(offset = 0) {
+    if (!subjectId) return;
+    setBankBusy(true);
+    try {
+      const res = await fetch("/api/question-bank?subject_id=" + encodeURIComponent(subjectId) + "&offset=" + offset, { cache: "no-store" });
+      const data = await res.json() as { items?: BankQuestion[]; has_more?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Cannot load the question bank.");
+      setBankItems((current)=>offset===0 ? (data.items??[]) : [...current,...(data.items??[])]);
+      setBankOffset(offset+(data.items??[]).length);
+      setBankHasMore(Boolean(data.has_more));
+      setBankError("");
+    } catch (error) {
+      setBankError(error instanceof Error ? error.message : "Question bank unavailable.");
+    } finally {
+      setBankBusy(false);
+    }
+  }
+
+  function fromDraft(draft: QuestionDraft) {
+    const options = draft.type === "true_false" ? ["True","False"]
+      : draft.type === "short_answer" ? []
+      : draft.options.split("\n").map((value)=>value.trim()).filter(Boolean);
+    return {
+      question_type: draft.type, prompt: draft.prompt.trim(), options,
+      answer_key: draft.type === "short_answer" ? null
+        : draft.type === "multiple_select" ? draft.answer.split("\n").map((value)=>value.trim()).filter(Boolean)
+        : draft.answer,
+      marks: Number(draft.marks),
+    };
+  }
+
+  async function saveToBank(index: number) {
+    if (!subjectId) return toast.error("Choose a class before saving reusable questions.");
+    setBankBusy(true);
+    try {
+      const res = await fetch("/api/question-bank", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: questions[index].bankId ? "update" : "create",
+          ...(questions[index].bankId ? { id: questions[index].bankId } : { subject_id: subjectId }),
+          question: fromDraft(questions[index]), difficulty: "medium" }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Cannot save question.");
+      toast.success("Question saved to the bank.");
+      await loadBank(0);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Cannot save question.");
+    } finally {
+      setBankBusy(false);
+    }
+  }
+
+  function addFromBank(item: BankQuestion) {
+    if (questions.length >= 100) return toast.error("A quiz supports at most 100 questions.");
+    const draft: QuestionDraft = {
+      type: item.question_type, prompt: item.prompt, options: item.options.join("\n"),
+      answer: Array.isArray(item.answer_key) ? item.answer_key.join("\n") : item.answer_key ?? "",
+      marks: String(item.marks),
+      bankId: item.can_manage ? item.id : undefined,
+    };
+    setQuestions((current) => {
+      // Replace the untouched default question instead of adding an empty extra question.
+      if (current.length === 1 && !current[0].prompt.trim()) return [draft];
+      return [...current, draft];
+    });
+    toast.success("Question added to this assessment.");
+  }
+
+  async function archiveBankItem(item: BankQuestion) {
+    if (!item.can_manage || !window.confirm("Archive this reusable question? Existing quizzes will not be affected.")) return;
+    setBankBusy(true);
+    try {
+      const res=await fetch("/api/question-bank", {method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"archive",id:item.id})});
+      const data=await res.json() as {error?:string};
+      if(!res.ok) throw new Error(data.error??"Cannot archive question.");
+      toast.success("Question archived.");
+      await loadBank(0);
+    } catch(error) {
+      toast.error(error instanceof Error ? error.message : "Cannot archive question.");
+    } finally {setBankBusy(false);}
+  }
 
   function updateQuestion(index: number, patch: Partial<QuestionDraft>) {
     setQuestions((current) => current.map((question, itemIndex) => (
@@ -171,6 +274,36 @@ export function QuizAuthoringForm({ classes }: { classes: ClassItem[] }) {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><h3 className="text-xs font-semibold">Reusable question bank</h3>
+            <p className="mt-1 text-[11px] text-[var(--muted)]">Copy saved subject questions into this quiz. Students never receive bank answer keys.</p></div>
+          <button type="button" className="btn-secondary !px-3 !py-2" disabled={!subjectId || bankBusy}
+            onClick={()=>loadBank(0)}>{bankBusy ? "Loading…" : "Browse questions"}</button>
+        </div>
+        {!subjectId && <p className="mt-3 text-xs text-[var(--muted)]">Select a class to see its subject question bank.</p>}
+        {bankError && <p role="alert" className="mt-3 text-xs text-amber-600">{bankError}</p>}
+        {bankItems.length > 0 && <>
+          <label className="mt-3 block text-xs font-semibold">Find a saved question
+            <input className="input-base mt-1" value={bankFilter} onChange={(event) => setBankFilter(event.target.value)}
+              placeholder="Search question text…" />
+          </label>
+          <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
+            {bankItems.filter((item) => item.prompt.toLowerCase().includes(bankFilter.toLowerCase())).map((item) =>
+              <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl border border-[var(--line)] p-3">
+                <div className="min-w-0"><p className="line-clamp-2 text-xs font-medium">{item.prompt}</p>
+                  <p className="mt-1 text-[10px] text-[var(--muted)]">{item.question_type.replaceAll("_"," ")} · {item.marks} marks · {item.difficulty}</p></div>
+                <div className="flex shrink-0 flex-col gap-2"><button type="button" className="btn-secondary !px-2 !py-1.5 text-xs"
+                  disabled={questions.length >= 100} onClick={() => addFromBank(item)}>Add</button>
+                  {item.can_manage && <button type="button" className="text-[10px] text-rose-600 underline disabled:opacity-40"
+                    disabled={bankBusy} onClick={()=>archiveBankItem(item)}>Archive</button>}
+                </div>
+              </div>)}
+          </div>
+          {bankHasMore&&<button type="button" className="btn-secondary mt-3 !px-3 !py-2 text-xs"
+            disabled={bankBusy} onClick={()=>loadBank(bankOffset)}>Load more saved questions</button>}
+        </>}
+      </section>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">Questions</h3>
@@ -190,6 +323,9 @@ export function QuizAuthoringForm({ classes }: { classes: ClassItem[] }) {
             <section key={index} className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 sm:p-5">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="text-xs font-semibold">Question {String(index + 1).padStart(2, "0")}</h3>
+                <button type="button" className="btn-secondary !px-2 !py-1 text-[10px]"
+                  disabled={!subjectId || bankBusy || !question.prompt.trim()}
+                  onClick={() => saveToBank(index)}>{question.bankId ? "Update bank" : "Save to bank"}</button>
                 {questions.length > 1 ? (
                   <button type="button" aria-label={`Remove question ${index + 1}`} className="btn-secondary !px-2.5 !py-2 text-[10px]" onClick={() => setQuestions((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
                     <Trash2 size={13} />Remove

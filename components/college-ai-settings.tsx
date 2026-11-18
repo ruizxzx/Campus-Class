@@ -8,6 +8,7 @@ type SettingsState = {
   enabled: boolean;
   model: string;
   configured: boolean;
+  needs_rekey: boolean;
 };
 
 export function CollegeAISettings() {
@@ -15,6 +16,7 @@ export function CollegeAISettings() {
     enabled: false,
     model: "openai/gpt-4o-mini",
     configured: false,
+    needs_rekey: false,
   });
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
@@ -26,7 +28,7 @@ export function CollegeAISettings() {
     fetch("/api/admin/ai-settings")
       .then(async (response) => {
         const raw = await response.text();
-        let result: { enabled?: boolean; model?: string; configured?: boolean; error?: string } = {};
+        let result: { enabled?: boolean; model?: string; configured?: boolean; needs_rekey?: boolean; error?: string } = {};
         if (raw) {
           try {
             result = JSON.parse(raw) as typeof result;
@@ -39,6 +41,7 @@ export function CollegeAISettings() {
           enabled: result.enabled ?? false,
           model: result.model ?? "openai/gpt-4o-mini",
           configured: result.configured ?? false,
+          needs_rekey: result.needs_rekey ?? false,
         });
       })
       .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not load AI settings."))
@@ -60,7 +63,7 @@ export function CollegeAISettings() {
         }),
       });
       const raw = await response.text();
-      let result: { enabled?: boolean; model?: string; configured?: boolean; error?: string } = {};
+      let result: { enabled?: boolean; model?: string; configured?: boolean; needs_rekey?: boolean; error?: string } = {};
       if (raw) {
         try {
           result = JSON.parse(raw) as typeof result;
@@ -73,6 +76,7 @@ export function CollegeAISettings() {
         enabled: result.enabled ?? settings.enabled,
         model: result.model ?? settings.model,
         configured: result.configured ?? settings.configured,
+        needs_rekey: result.needs_rekey ?? false,
       });
       setApiKey("");
       toast.success("College AI settings saved.");
@@ -93,6 +97,9 @@ export function CollegeAISettings() {
     </div>
 
     {loading ? <div className="mt-6 h-32 animate-pulse rounded-2xl bg-[var(--surface-2)]" aria-label="Loading AI settings"/> : <>
+      {settings.needs_rekey && <div role="alert" className="mt-5 rounded-xl border border-amber-500/50 bg-amber-500/10 p-4 text-xs leading-6">
+        Your OpenRouter key was saved using the previous encryption system, but its original server encryption key is missing. Paste the same OpenRouter API key below and save it again after the new Vault migration. Existing ciphertext cannot be decrypted without the original key.
+      </div>}
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <label className="block text-xs font-medium">
           OpenRouter API key
@@ -112,7 +119,7 @@ export function CollegeAISettings() {
               {showKey ? <EyeOff size={15}/> : <Eye size={15}/>}
             </button>
           </div>
-          <span className="mt-1.5 block text-[10px] text-[var(--muted)]">{settings.configured ? "The saved key is never returned to this page." : "The key is encrypted before it is stored."}</span>
+          <span className="mt-1.5 block text-[10px] text-[var(--muted)]">{settings.configured ? "The saved key is never returned to this page." : "The key is encrypted with Supabase Vault before storage."}</span>
         </label>
         <label className="block text-xs font-medium">
           OpenRouter model

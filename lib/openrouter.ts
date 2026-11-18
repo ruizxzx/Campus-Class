@@ -3,7 +3,13 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Profile } from "@/types/database";
 
-type OpenRouterMessage = { role: "system" | "user" | "assistant"; content: string };
+export type OpenRouterMessage = {
+  role: "system" | "user" | "assistant";
+  content: string | (
+    | { type: "text"; text: string }
+    | { type: "file"; file: { filename: string; file_data: string } }
+  )[];
+};
 
 export class OpenRouterError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -64,7 +70,7 @@ export async function completeWithOpenRouter(
 ) {
   const admin = createAdminClient();
   const { data: settings, error } = await admin.from("college_ai_settings")
-    .select("enabled,model,api_key_ciphertext,api_key_iv,api_key_tag")
+    .select("enabled,model,api_key_vault_id,api_key_ciphertext,api_key_iv,api_key_tag")
     .eq("college_id", profile.college_id)
     .maybeSingle();
 
@@ -72,15 +78,32 @@ export async function completeWithOpenRouter(
     console.error("College AI configuration lookup failed", { code: error.code });
     throw new OpenRouterError("Could not load this college's AI configuration.", 500);
   }
-  if (!settings?.enabled || !settings.api_key_ciphertext || !settings.api_key_iv || !settings.api_key_tag) {
+  if (!settings?.enabled) {
     throw new OpenRouterError("CampusClass AI is not enabled for this college. Contact your college administrator.", 503);
+  }
+  if (!settings.api_key_vault_id && (!settings.api_key_ciphertext || !settings.api_key_iv || !settings.api_key_tag)) {
+    throw new OpenRouterError("The college AI key has not been configured. Ask an administrator to save an OpenRouter key.", 503);
   }
 
   // The quota RPC is atomic across all Next.js instances and routes.
   // Fail closed if its migration is missing rather than spending provider credits
   // without a server-enforced budget.
-  if (messages.length > 24 || messages.some((message) => message.content.length > 24000)
-    || messages.reduce((total, message) => total + message.content.length, 0) > 48000
+  const hasPdf = messages.some((message) => Array.isArray(message.content)
+    && message.content.some((part) => part.type === "file"));
+  const messageLengths = messages.map((message) => {
+    if (typeof message.content === "string") return message.content.length;
+    return message.content.reduce((total, part) => {
+      if (part.type === "text") return total + part.text.length;
+      // Server-generated signed URLs only, never client-supplied PDF data URLs.
+      if (!/^https:\/\//.test(part.file.file_data) || part.file.file_data.length > 4000
+        || !part.file.filename.toLowerCase().endsWith(".pdf")) return 100000;
+      return total + part.file.file_data.length;
+    }, 0);
+  });
+  if (messages.length > 24 || (hasPdf && messages.filter((message) =>
+      Array.isArray(message.content) && message.content.some((part) => part.type === "file")).length > 1)
+    || messageLengths.some((length) => length > 24000)
+    || messageLengths.reduce((total, length) => total + length, 0) > 48000
     || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 2400) {
     throw new OpenRouterError("The AI request exceeds the supported context limit.", 400);
   }
@@ -96,13 +119,36 @@ export async function completeWithOpenRouter(
     throw new OpenRouterError("Your hourly AI request limit has been reached. Try again next hour.", 429);
   }
 
-  const secret = decryptOpenRouterKey(
-    settings.api_key_ciphertext,
-    settings.api_key_iv,
-    settings.api_key_tag,
-  );
-  const apiKey = secret.toString("utf8");
-  secret.fill(0);
+  let apiKey: string;
+  if (settings.api_key_vault_id) {
+    // The service-only RPC reads a per-college secret from Supabase Vault.
+    // Its root encryption key is managed outside Postgres and Vercel.
+    const { data: vaultKey, error: vaultError } = await admin.rpc("read_college_ai_secret", {
+      p_college_id: profile.college_id,
+      p_user_id: profile.id,
+    });
+    if (vaultError) {
+      console.error("College AI Vault lookup failed", { code: vaultError.code });
+      throw new OpenRouterError("College AI secure storage is unavailable. Apply the Vault SQL migration.", 503);
+    }
+    if (typeof vaultKey !== "string" || !vaultKey.trim()) {
+      throw new OpenRouterError("The saved college AI key is unavailable. Ask an administrator to save it again.", 503);
+    }
+    apiKey = vaultKey;
+  } else {
+    // Legacy AES-GCM rows remain readable only with their ORIGINAL master key.
+    // A missing historical key cannot be reconstructed from its ciphertext.
+    if (!process.env.OPENROUTER_ENCRYPTION_KEY) {
+      throw new OpenRouterError("The college AI key uses legacy encryption and its server key is missing. Ask your administrator to re-save the OpenRouter API key in AI Settings after the Vault migration.", 503);
+    }
+    const secret = decryptOpenRouterKey(
+      settings.api_key_ciphertext!,
+      settings.api_key_iv!,
+      settings.api_key_tag!,
+    );
+    apiKey = secret.toString("utf8");
+    secret.fill(0);
+  }
 
   let response: Response;
   try {
@@ -119,6 +165,7 @@ export async function completeWithOpenRouter(
         messages,
         max_tokens: maxTokens,
         temperature: 0.2,
+        ...(hasPdf ? { plugins: [{ id: "file-parser", pdf: { engine: "cloudflare-ai" } }] } : {}),
       }),
       signal: AbortSignal.timeout(30_000),
     });

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { requestProfile, isResponse } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { collegeAISettingsSchema } from "@/lib/validators";
-import { encryptOpenRouterKey, OpenRouterError } from "@/lib/openrouter";
 
 export const runtime = "nodejs";
 
@@ -15,7 +14,7 @@ export async function GET() {
     }
 
     const { data, error } = await createAdminClient().from("college_ai_settings")
-      .select("enabled,model,api_key_ciphertext,updated_at")
+      .select("enabled,model,api_key_vault_id,api_key_ciphertext,updated_at")
       .eq("college_id", context.profile.college_id)
       .maybeSingle();
     if (error) {
@@ -25,7 +24,8 @@ export async function GET() {
     return NextResponse.json({
       enabled: data?.enabled ?? false,
       model: data?.model ?? "openai/gpt-4o-mini",
-      configured: Boolean(data?.api_key_ciphertext),
+      configured: Boolean(data?.api_key_vault_id || data?.api_key_ciphertext),
+      needs_rekey: Boolean(data?.api_key_ciphertext && !data?.api_key_vault_id && !process.env.OPENROUTER_ENCRYPTION_KEY),
       updated_at: data?.updated_at ?? null,
     });
   } catch (error) {
@@ -44,9 +44,6 @@ export async function PUT(request: Request) {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
       return NextResponse.json({ error: "Server Supabase URL is not configured. Add NEXT_PUBLIC_SUPABASE_URL to .env.local." }, { status: 503 });
     }
-    if (!process.env.OPENROUTER_ENCRYPTION_KEY) {
-      return NextResponse.json({ error: "OpenRouter encryption key is missing. Add OPENROUTER_ENCRYPTION_KEY to .env.local and restart the app." }, { status: 503 });
-    }
     const context = await requestProfile();
     if (isResponse(context)) return context;
     if (context.profile.role !== "admin") {
@@ -60,7 +57,7 @@ export async function PUT(request: Request) {
 
     const admin = createAdminClient();
     const { data: current, error: currentError } = await admin.from("college_ai_settings")
-      .select("api_key_ciphertext,api_key_iv,api_key_tag")
+      .select("api_key_vault_id,api_key_ciphertext,api_key_iv,api_key_tag")
       .eq("college_id", context.profile.college_id)
       .maybeSingle();
     if (currentError) {
@@ -68,36 +65,46 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Could not update AI settings." }, { status: 500 });
     }
 
-    let encryptedKey = {
-      api_key_ciphertext: current?.api_key_ciphertext ?? null,
-      api_key_iv: current?.api_key_iv ?? null,
-      api_key_tag: current?.api_key_tag ?? null,
-    };
-    if (parsed.data.api_key) {
-      try {
-        encryptedKey = encryptOpenRouterKey(parsed.data.api_key);
-      } catch (error) {
-        if (error instanceof OpenRouterError) {
-          return NextResponse.json({ error: error.message }, { status: error.status });
-        }
-        throw error;
-      }
-    }
-    if (parsed.data.enabled && !encryptedKey.api_key_ciphertext) {
+    if (parsed.data.enabled && !parsed.data.api_key
+      && !current?.api_key_vault_id && !current?.api_key_ciphertext) {
       return NextResponse.json({ error: "Add an OpenRouter API key before enabling CampusClass AI." }, { status: 400 });
     }
 
-    const { error: saveError } = await admin.from("college_ai_settings").upsert({
-      college_id: context.profile.college_id,
-      enabled: parsed.data.enabled,
-      model: parsed.data.model,
-      ...encryptedKey,
-      updated_by: context.userId,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "college_id" });
-    if (saveError) {
-      console.error("College AI settings could not be saved", { code: saveError.code });
-      return NextResponse.json({ error: "Could not save AI settings." }, { status: 500 });
+    if (parsed.data.api_key) {
+      // Atomic Vault update + settings upsert in one database transaction.
+      // No application environment encryption secret is required.
+      const { error: vaultError } = await admin.rpc("set_college_ai_secret", {
+        p_college_id: context.profile.college_id,
+        p_admin_id: context.userId,
+        p_secret: parsed.data.api_key,
+        p_model: parsed.data.model,
+        p_enabled: parsed.data.enabled,
+      });
+      if (vaultError) {
+        console.error("College AI Vault save failed", { code: vaultError.code });
+        return NextResponse.json({
+          error: vaultError.code === "PGRST202" || vaultError.code === "42883"
+            ? "Run the new college AI Vault migration in Supabase SQL Editor before saving the key."
+            : "Could not securely save the college AI key. Check the Vault migration.",
+        }, { status: 503 });
+      }
+    } else {
+      // Do not touch the existing key when changing the model/toggle.
+      const { error: saveError } = await admin.from("college_ai_settings").upsert({
+        college_id: context.profile.college_id,
+        enabled: parsed.data.enabled,
+        model: parsed.data.model,
+        api_key_vault_id: current?.api_key_vault_id ?? null,
+        api_key_ciphertext: current?.api_key_ciphertext ?? null,
+        api_key_iv: current?.api_key_iv ?? null,
+        api_key_tag: current?.api_key_tag ?? null,
+        updated_by: context.userId,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "college_id" });
+      if (saveError) {
+        console.error("College AI settings could not be saved", { code: saveError.code });
+        return NextResponse.json({ error: "Could not save AI settings." }, { status: 500 });
+      }
     }
 
     await admin.from("activity_logs").insert({
@@ -111,7 +118,9 @@ export async function PUT(request: Request) {
       success: true,
       enabled: parsed.data.enabled,
       model: parsed.data.model,
-      configured: Boolean(encryptedKey.api_key_ciphertext),
+      configured: Boolean(parsed.data.api_key || current?.api_key_vault_id || current?.api_key_ciphertext),
+      needs_rekey: Boolean(!parsed.data.api_key && current?.api_key_ciphertext
+        && !current?.api_key_vault_id && !process.env.OPENROUTER_ENCRYPTION_KEY),
     });
   } catch (error) {
     console.error("Unexpected College AI settings save failure", {

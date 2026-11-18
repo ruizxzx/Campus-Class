@@ -3,32 +3,9 @@ import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
 import { StudentSuccessDashboard } from "@/components/student-success-dashboard";
-import { summarizeStudent, releasedQuizEvidence } from "@/lib/student-success";
+import { summarizeStudent, releasedQuizEvidence, DEFAULT_SUPPORT_RULES, validSupportRules, type SupportRules } from "@/lib/student-success";
+import { collectEvidence } from "@/lib/academic-evidence";
 
-
-// PostgREST is often configured to cap a response at 1,000 rows. Page through
-// the selected class only, never infer student support signals from truncated
-// college-wide arrays. Stop rather than silently calculate partial evidence.
-type EvidencePage<T> = { data: T[] | null; error: { code: string } | null };
-async function collectEvidence<T>(
-  ids: string[],
-  fetchPage: (batch: string[], from: number, to: number) => Promise<EvidencePage<T>>,
-): Promise<{ data: T[]; error: { code: string } | null; truncated: boolean }> {
-  const rows: T[] = [];
-  for (let index = 0; index < ids.length; index += 50) {
-    const batch = ids.slice(index, index + 50);
-    let ended = false;
-    for (let offset = 0; offset < 50000; offset += 1000) {
-      const result = await fetchPage(batch, offset, offset + 999);
-      if (result.error) return { data: rows, error: result.error, truncated: false };
-      const batchRows = result.data ?? [];
-      rows.push(...batchRows);
-      if (batchRows.length < 1000) { ended = true; break; }
-    }
-    if (!ended) return { data: rows, error: null, truncated: true };
-  }
-  return { data: rows, error: null, truncated: false };
-}
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +79,25 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   const sessions = (sessionsResult.data ?? []).filter((session) =>
     session.closed_at || Date.parse(session.expires_at) <= nowEpochMs());
   const sessionIds = new Set(sessions.map((session) => session.id));
+  // College admin owns these explainable thresholds. When the forward patch
+  // is not yet present, keep the old transparent defaults until it is applied.
+  const { data: savedRules, error: rulesError } = await db.from("student_success_rules")
+    .select("attendance_min_percent,overdue_assignment_count,quiz_min_percent,min_attendance_sessions,min_assigned_work,min_released_quizzes")
+    .eq("college_id",collegeId).maybeSingle();
+  const missingRulesTable=rulesError?.code==="PGRST205"
+    || rulesError?.code==="42P01" || rulesError?.code==="PGRST116";
+  if(rulesError&&!missingRulesTable)
+    throw new Error("Unable to load Student Success support thresholds.");
+  const rules:SupportRules=savedRules?{
+    attendance_min_percent:Number(savedRules.attendance_min_percent),
+    overdue_assignment_count:Number(savedRules.overdue_assignment_count),
+    quiz_min_percent:Number(savedRules.quiz_min_percent),
+    min_attendance_sessions:Number(savedRules.min_attendance_sessions),
+    min_assigned_work:Number(savedRules.min_assigned_work),
+    min_released_quizzes:Number(savedRules.min_released_quizzes),
+  }:DEFAULT_SUPPORT_RULES;
+  if(!validSupportRules(rules))throw new Error("Invalid college support thresholds.");
+
   const now = nowEpochMs();
 
   const students = studentIds.map((id) => {
@@ -117,7 +113,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
       overdueWork: (assignmentsResult.data ?? []).filter((item) => item.due_at
         && Date.parse(item.due_at) < now && !submittedIds.has(item.id)).length,
       releasedQuizScores: scores,
-    });
+    },rules);
     const person = names.get(id);
     return { id, name: person?.name ?? "Student", email: person?.email ?? "", ...metrics };
   }).sort((a,b) => ({ needs_support: 0, watch: 1, on_track: 2, insufficient_data: 3 })[a.level]
@@ -127,7 +123,8 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     <PageHeader title="Student Success Intelligence" description="Evidence-based academic support signals and faculty-owned follow-ups. Not AI diagnoses or automatic grading."/>
     <StudentSuccessDashboard
       classId={classroom.id} classes={classOptions} students={students}
-      interventions={interventionsResult.data ?? []}
+      interventions={interventionsResult.data ?? []} nowMs={now}
+      rules={rules} canEditRules={profile.role==="admin"} rulesAvailable={!missingRulesTable}
     />
   </>;
 }
