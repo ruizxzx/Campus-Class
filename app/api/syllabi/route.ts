@@ -30,7 +30,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Choose a valid class." }, { status: 400 });
     }
     const safeFileName = file.name.toLowerCase();
-    if (!safeFileName.endsWith(".pdf") && file.type !== "application/pdf") {
+    // AI PDF readers and signed-storage retrieval require a real .pdf object path.
+    // An application/pdf MIME label alone is not a safe replacement for the extension.
+    if (!safeFileName.endsWith(".pdf")) {
       return NextResponse.json({ error: "The syllabus must be a PDF file." }, { status: 400 });
     }
     if (file.type && file.type !== "application/pdf" && file.type !== "application/x-pdf") {
@@ -50,16 +52,21 @@ export async function POST(request: Request) {
       .eq("id", classId)
       .eq("college_id", context.profile.college_id)
       .maybeSingle();
-    if (classError || !classroom) {
+    if (classError) {
+      console.error("Syllabus class lookup failed", { code: classError.code });
+      return NextResponse.json({ error: "Could not verify the class right now." }, { status: 503 });
+    }
+    if (!classroom) {
       return NextResponse.json({ error: "The selected class is unavailable." }, { status: 404 });
     }
     if (context.profile.role === "faculty") {
-      const { data: permission } = await admin.from("class_faculty")
+      const { data: permission, error: permissionError } = await admin.from("class_faculty")
         .select("faculty_id")
         .eq("college_id", context.profile.college_id)
         .eq("class_id", classId)
         .eq("faculty_id", context.userId)
         .maybeSingle();
+      if (permissionError) return NextResponse.json({ error: "Could not verify faculty access." }, { status: 503 });
       if (!permission) {
         return NextResponse.json({ error: "You are not assigned to this class." }, { status: 403 });
       }
@@ -138,19 +145,24 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Invalid syllabus." }, { status: 400 });
   }
   const admin = createAdminClient();
-  const { data: syllabus } = await admin.from("class_syllabi")
+  const { data: syllabus, error: lookupError } = await admin.from("class_syllabi")
     .select("id,class_id,storage_path")
     .eq("id", id)
     .eq("college_id", context.profile.college_id)
     .maybeSingle();
+  if (lookupError) {
+    console.error("Syllabus delete lookup failed", { code: lookupError.code });
+    return NextResponse.json({ error: "Could not check the syllabus before deleting it." }, { status: 503 });
+  }
   if (!syllabus) return NextResponse.json({ error: "Syllabus not found." }, { status: 404 });
   if (context.profile.role === "faculty") {
-    const { data: permission } = await admin.from("class_faculty")
+    const { data: permission, error: permissionError } = await admin.from("class_faculty")
       .select("faculty_id")
       .eq("college_id", context.profile.college_id)
       .eq("class_id", syllabus.class_id)
       .eq("faculty_id", context.userId)
       .maybeSingle();
+    if (permissionError) return NextResponse.json({ error: "Could not verify faculty access." }, { status: 503 });
     if (!permission) return NextResponse.json({ error: "You are not assigned to this class." }, { status: 403 });
   }
   // Delete metadata first. If the database refuses the delete, the original

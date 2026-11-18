@@ -22,15 +22,28 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   const code = `CC-${randomBytes(8).toString("hex").toUpperCase()}`;
   const codeHash = createHash("sha256").update(code).digest("hex");
-  const { error: disableError } = await admin.from("enrollment_codes").update({ active: false }).eq("class_id", id).eq("college_id", context.profile.college_id).eq("active", true);
-  if (disableError) {
-    console.error(`Enrollment-code rotation failed (${disableError.code}): ${disableError.message}`);
-    return NextResponse.json({ error: "Could not rotate the previous enrollment code." }, { status: 500 });
+  // First prepare the replacement; never invalidate every existing active
+  // class code before proving the replacement exists.
+  const { data: newCode, error: createError } = await admin.from("enrollment_codes")
+    .insert({ college_id: context.profile.college_id, class_id: id, code_hash: codeHash, created_by: context.userId })
+    .select("id").single();
+  if (createError || !newCode) {
+    console.error("Enrollment-code creation failed", { code: createError?.code });
+    return NextResponse.json({ error: "Could not create the replacement enrollment code. Existing codes remain usable." }, { status: 503 });
   }
-  const { error } = await admin.from("enrollment_codes").insert({ college_id: context.profile.college_id, class_id: id, code_hash: codeHash, created_by: context.userId });
-  if (error) {
-    console.error(`Enrollment-code creation failed (${error.code}): ${error.message}`);
-    return NextResponse.json({ error: "Could not create enrollment code." }, { status: 500 });
+  const { error: disableError } = await admin.from("enrollment_codes")
+    .update({ active: false }).eq("class_id", id)
+    .eq("college_id", context.profile.college_id).eq("active", true)
+    .neq("id", newCode.id);
+  if (disableError) {
+    console.error("Enrollment-code rotation failed", { code: disableError.code });
+    // Revoke only our newly generated code; old codes were not deliberately
+    // disabled on the failed path and should remain usable.
+    const { error: rollbackError } = await admin.from("enrollment_codes")
+      .update({ active: false }).eq("id", newCode.id)
+      .eq("college_id", context.profile.college_id);
+    if (rollbackError) console.error("Enrollment-code replacement cleanup failed", { code: rollbackError.code });
+    return NextResponse.json({ error: "Could not complete enrollment-code rotation. Please check the class's active codes." }, { status: 503 });
   }
   return NextResponse.json({ code });
 }

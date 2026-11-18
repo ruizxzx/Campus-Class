@@ -31,6 +31,8 @@ Reviewed source, route configuration, existing security tests and migration hist
 4. Unclaim an invitation on profile activation failure using the exact claim timestamp.
 5. Distinguish voluntarily left class re-enrollment from administrator removal, validate database errors.
 6. Add forward-only SQL 039: scoped service-role enrollment restore grant; conditionally enforce unique private attachment ownership without deleting duplicate legacy rows.
+7. Safeguard enrollment-code rotation so an insert failure does not invalidate the previous code.
+8. Require PDF filenames for syllabus uploads, distinguish database lookup errors from missing records and let staff retry announcement notifications without moving published announcements between classes.
 
 ## Operational prerequisites
 - Apply migrations through **039** in order in the correct Campus Class production Supabase SQL Editor. The GitHub push does not run database migrations.

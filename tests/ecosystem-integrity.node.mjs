@@ -49,3 +49,25 @@ test("migration 039 is forward-only and guards existing duplicate data", () => {
   assert.match(sql, /create unique index if not exists submission_attachments_college_path_unique/i);
   assert.doesNotMatch(sql, /drop table|truncate table|disable row level security/i);
 });
+
+test("enrollment-code rotation saves a replacement before disabling previous codes", () => {
+  const source = read("app/api/classes/[id]/enrollment-code/route.ts");
+  const inserted = source.indexOf('.insert({ college_id: context.profile.college_id');
+  const disabled = source.indexOf('.neq("id", newCode.id)');
+  assert.ok(inserted >= 0 && disabled > inserted);
+  assert.match(source, /rollbackError/);
+  assert.match(source, /Existing codes remain usable/);
+});
+test("syllabus upload keeps PDF file extensions required by downstream readers", () => {
+  const route = read("app/api/syllabi/route.ts");
+  assert.match(route, /if \(!safeFileName\.endsWith\("\.pdf"\)\)/);
+  assert.match(route, /Syllabus delete lookup failed/);
+  assert.match(route, /permissionError/);
+});
+test("announcements can retry notices without silently switching published classes", () => {
+  const ui = read("components/academic-workflows.tsx");
+  assert.match(ui, /retryAnnouncementNotifications/);
+  assert.match(ui, /Retry notifications/);
+  assert.match(ui, /disabled=\{Boolean\(editingId\)\}/);
+  assert.match(ui, /\.update\(\{title:form\.title,body:form\.body\}\)/);
+});

@@ -186,6 +186,7 @@ export function AnnouncementComposer({ profile, classes, announcements }: { prof
   const [form,setForm]=useState({class_id:"",title:"",body:""});
   const [editingId,setEditingId]=useState<string|null>(null);
   const [saving,setSaving]=useState(false);
+  const [retryingId,setRetryingId]=useState<string|null>(null);
   const router=useRouter();
 
   function clearForm(){setForm({class_id:"",title:"",body:""});setEditingId(null);}
@@ -194,7 +195,7 @@ export function AnnouncementComposer({ profile, classes, announcements }: { prof
     setSaving(true);
     const supabase=createClient();
     if(editingId){
-      const {data,error}=await supabase.from("announcements").update({class_id:form.class_id,title:form.title,body:form.body}).eq("id",editingId).select("id,title,body,published_at,class_id,author_id").single();
+      const {data,error}=await supabase.from("announcements").update({title:form.title,body:form.body}).eq("id",editingId).select("id,title,body,published_at,class_id,author_id").single();
       if(error)toast.error("Could not update this announcement.");
       else{setItems(current=>current.map(item=>item.id===editingId?data:item));clearForm();toast.success("Announcement updated.");router.refresh();}
     }else{
@@ -213,6 +214,17 @@ export function AnnouncementComposer({ profile, classes, announcements }: { prof
     setSaving(false);
   }
 
+  async function retryAnnouncementNotifications(id:string){
+    setRetryingId(id);
+    try {
+      const response=await fetch(`/api/announcements/${id}/notify`,{method:"POST"});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error??"Could not retry announcement notifications.");
+      toast.success(result.notified ? `${result.notified} in-app notification(s) added.` : "Announcement notifications are up to date.");
+    }catch(error){toast.error(error instanceof Error?error.message:"Could not retry notifications.");}
+    finally{setRetryingId(null);}
+  }
+
   async function remove(id:string){
     if(!window.confirm("Delete this announcement? This cannot be undone."))return;
     const {error}=await createClient().from("announcements").delete().eq("id",id);
@@ -226,7 +238,7 @@ export function AnnouncementComposer({ profile, classes, announcements }: { prof
     <section className="surface p-5 sm:p-6">
       <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green)]"><Megaphone size={18}/></div><div><div className="text-sm font-semibold">{editingId?"Edit announcement":"New announcement"}</div><div className="mt-1 text-[11px] text-[var(--muted)]">Share an update with a selected class.</div></div></div>
       <form onSubmit={publish} className="mt-5 space-y-4">
-        <Field label="Class"><select className="input-base" required value={form.class_id} onChange={e=>setForm({...form,class_id:e.target.value})}><option value="">Select a class</option>{classes.map(c=><option key={c.id} value={c.id}>{c.subjects?.name??"Class"} · Section {c.section}</option>)}</select></Field>
+        <Field label="Class"><select className="input-base" required disabled={Boolean(editingId)} value={form.class_id} onChange={e=>setForm({...form,class_id:e.target.value})}><option value="">Select a class</option>{classes.map(c=><option key={c.id} value={c.id}>{c.subjects?.name??"Class"} · Section {c.section}</option>)}</select></Field>
         <Field label="Title"><input className="input-base" required minLength={2} maxLength={180} value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Announcement title"/></Field>
         <Field label="Message"><textarea className="input-base min-h-36" required value={form.body} onChange={e=>setForm({...form,body:e.target.value})} placeholder="Write your announcement…"/></Field>
         <button className="btn-primary w-full" disabled={saving||!classes.length}>{saving?(editingId?"Saving…":"Publishing…"):(editingId?"Save changes":"Publish announcement")}<Send size={14}/></button>
@@ -239,7 +251,7 @@ export function AnnouncementComposer({ profile, classes, announcements }: { prof
         {items.length?items.map(a=><article key={a.id} className="rounded-xl border border-[var(--line)] p-4">
           <div className="flex items-start justify-between gap-3"><div className="text-xs font-semibold">{a.title}</div><span className="status-pill">{format(new Date(a.published_at), "dd/MM/yyyy")}</span></div>
           <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-[var(--muted)]">{a.body}</p>
-          {(profile.role==="admin"||a.author_id===profile.id)&&<div className="mt-3 flex justify-end gap-2 border-t border-[var(--line)] pt-3"><button type="button" onClick={()=>{setEditingId(a.id);setForm({class_id:a.class_id,title:a.title,body:a.body});}} className="btn-secondary !px-3 !py-2 text-[10px]">Edit</button><button type="button" onClick={()=>void remove(a.id)} className="btn-danger !px-3 !py-2 text-[10px]">Delete</button></div>}
+          {(profile.role==="admin"||a.author_id===profile.id)&&<div className="mt-3 flex justify-end gap-2 border-t border-[var(--line)] pt-3"><button type="button" onClick={()=>{setEditingId(a.id);setForm({class_id:a.class_id,title:a.title,body:a.body});}} className="btn-secondary !px-3 !py-2 text-[10px]">Edit</button><button type="button" disabled={retryingId===a.id||saving} onClick={()=>void retryAnnouncementNotifications(a.id)} className="btn-secondary !px-3 !py-2 text-[10px]">{retryingId===a.id?"Retrying…":"Retry notifications"}</button><button type="button" onClick={()=>void remove(a.id)} className="btn-danger !px-3 !py-2 text-[10px]">Delete</button></div>}
         </article>):<EmptyState title="No announcements" description="Published class updates will appear here."/>}
       </div>
     </section>
@@ -248,7 +260,16 @@ export function AnnouncementComposer({ profile, classes, announcements }: { prof
 
 export function JoinClassForm() {
   const router=useRouter();const [code,setCode]=useState("");const [loading,setLoading]=useState(false);
-  async function submit(e:React.FormEvent){e.preventDefault();setLoading(true);const response=await fetch("/api/classes/join",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});const data=await response.json();if(!response.ok)toast.error(data.error??"Could not join this class.");else{toast.success("You joined the class.");router.push("/classes");router.refresh();}setLoading(false);}
+  async function submit(e:React.FormEvent){
+    e.preventDefault();setLoading(true);
+    try{
+      const response=await fetch("/api/classes/join",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error??"Could not join this class.");
+      toast.success("You joined the class.");router.push("/classes");router.refresh();
+    }catch(error){toast.error(error instanceof Error?error.message:"Could not join this class.");}
+    finally{setLoading(false);}
+  }
   return <form onSubmit={submit} className="surface mx-auto max-w-xl p-6 sm:p-8"><div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[var(--green-soft)] text-[var(--green)]"><Plus size={22}/></div><h2 className="mt-4 text-center text-lg font-semibold">Join a class</h2><p className="mt-2 text-center text-xs leading-6 text-[var(--muted)]">Enter the enrollment code shared by your college faculty or administrator.</p><Field label="Class enrollment code"><input className="input-base mt-1 text-center text-lg font-semibold uppercase tracking-[.14em]" required minLength={5} maxLength={40} value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="CC-XXXXXXXX"/></Field><button className="btn-primary mt-4 w-full" disabled={loading}>{loading?"Joining…":"Join class"}<ArrowUpRight size={14}/></button></form>;
 }
 
