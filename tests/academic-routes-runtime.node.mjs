@@ -63,6 +63,7 @@ function getPage(name,{table,throwConfig=false}){
     },
     "@/lib/time":{nowEpochMs:()=>1000},
     "@/components/ui":{PageHeader:"PageHeader"},
+    "@/components/localized-page-header":{LocalizedPageHeader:"PageHeader"},
     "@/components/academic-data-state":{AcademicDataState:"AcademicDataState"},
     "@/components/gradebook-grid":{GradebookGrid:"GradebookGrid"},
     "@/components/outcome-dashboard":{OutcomeDashboard:"OutcomeDashboard"},

@@ -1,7 +1,7 @@
 import { nowEpochMs } from "@/lib/time";
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PageHeader } from "@/components/ui";
+import { LocalizedPageHeader as PageHeader } from "@/components/localized-page-header";
 import { AcademicDataState } from "@/components/academic-data-state";
 import { academicIssueFor, academicLog, missingOptionalAcademicTable } from "@/lib/academic-health";
 import { StudentSuccessDashboard } from "@/components/student-success-dashboard";

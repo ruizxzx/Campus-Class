@@ -8,7 +8,8 @@ import { BrandMark } from "@/components/ui";
 import { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, Sun, Moon, LogOut, Plus, CalendarDays, ChartNoAxesCombined, School, Menu, X, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower, PenLine, QrCode, TrendingUp, ClipboardCheck, Target } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PWAInstallButton } from "@/components/pwa-install-button";
-import { isUiLanguage, languageOptions, translateUi, type UiLanguage } from "@/lib/ui-language";
+import { languageOptions, translateUi, type UiLanguage } from "@/lib/ui-language";
+import { chooseUiLanguage, useUiLanguage } from "@/lib/use-ui-language";
 
 const iconMap = { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, CalendarDays, ChartNoAxesCombined, School, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower, PenLine, QrCode, TrendingUp, ClipboardCheck, Target } as const;
 type NavItem = { label: string; href: string; icon: keyof typeof iconMap };
@@ -54,18 +55,10 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
     () => false
   );
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [language, setLanguage] = useState<UiLanguage>("en");
-  useEffect(() => {
-    const saved = window.localStorage.getItem("campusclass-ui-language");
-    if (isUiLanguage(saved)) {
-      setLanguage(saved);
-      document.documentElement.lang = saved;
-    }
-  }, []);
+  const language=useUiLanguage();
+  useEffect(()=>{document.documentElement.lang=language;},[language]);
   function chooseLanguage(next: UiLanguage) {
-    setLanguage(next);
-    window.localStorage.setItem("campusclass-ui-language", next);
-    document.documentElement.lang = next;
+    chooseUiLanguage(next);
   }
   const [signingOut, setSigningOut] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);

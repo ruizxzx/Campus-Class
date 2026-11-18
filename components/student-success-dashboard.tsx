@@ -2,6 +2,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useUiLanguage } from "@/lib/use-ui-language";
+import { translateUi } from "@/lib/ui-language";
 import { Activity, AlertTriangle, BookOpenCheck, CheckCircle2, Search, ShieldCheck, Download } from "lucide-react";
 import Link from "next/link";
 import { validSupportRules, type StudentSignal, type SupportRules } from "@/lib/student-success";
@@ -14,6 +16,8 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
   rules:SupportRules;canEditRules:boolean;rulesAvailable:boolean;
 }) {
   const router = useRouter();
+  const language=useUiLanguage();
+  const t=(label:string)=>translateUi(label,language);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -86,10 +90,10 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
   const percent = (number: number | null) => number === null ? "—" : number + "%";
   return <div className="space-y-5">
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {[{ label: "Learners", value: students.length, icon: BookOpenCheck },
-        { label: "Need support", value: counts.needs_support, icon: AlertTriangle },
-        { label: "Watchlist", value: counts.watch, icon: Activity },
-        { label: "On track", value: counts.on_track, icon: CheckCircle2 }].map((item) => {
+      {[{ label: t("Learners"), value: students.length, icon: BookOpenCheck },
+        { label: t("Need support"), value: counts.needs_support, icon: AlertTriangle },
+        { label: t("Watchlist"), value: counts.watch, icon: Activity },
+        { label: t("On track"), value: counts.on_track, icon: CheckCircle2 }].map((item) => {
           const Icon = item.icon;
           return <div key={item.label} className="surface p-5"><div className="flex items-center justify-between text-xs text-[var(--muted)]">{item.label}<Icon size={18}/></div><p className="mt-3 text-3xl font-bold tabular-nums">{item.value}</p></div>;
         })}
@@ -97,17 +101,17 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
     {canEditRules&&<SupportRuleEditor initial={rules} available={rulesAvailable}/>}
     <section className="surface p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-base font-semibold">Academic support signals</h2><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Transparent rules: attendance below {rules.attendance_min_percent}% ({rules.min_attendance_sessions}+ sessions), {rules.overdue_assignment_count}+ overdue items, released quiz average below {rules.quiz_min_percent}% ({rules.min_released_quizzes}+ results).</p></div>
+        <div><h2 className="text-base font-semibold">{t("Academic support signals")}</h2><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Transparent rules: attendance below {rules.attendance_min_percent}% ({rules.min_attendance_sessions}+ sessions), {rules.overdue_assignment_count}+ overdue items, released quiz average below {rules.quiz_min_percent}% ({rules.min_released_quizzes}+ results).</p></div>
         <select className="input-base !w-auto max-w-full" value={classId} onChange={(event) => router.push("/success?class_id=" + encodeURIComponent(event.target.value))}>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
       </div>
       <div className="mt-5 flex flex-wrap gap-3">
-        <label className="relative min-w-[180px] flex-1"><Search size={15} className="absolute top-3.5 left-3 text-[var(--muted)]"/><input className="input-base !pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search students…" aria-label="Search students"/></label>
-        <select className="input-base !w-auto" value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filter by signal">{[["all","All signals"],["needs_support","Needs support"],["watch","Watch"],["on_track","On track"],["insufficient_data","Collecting data"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
-        <Link href="/attendance" className="btn-secondary">Attendance</Link>
-        <button type="button" className="btn-secondary" onClick={exportSignals}><Download size={15}/>Export filtered CSV</button>
+        <label className="relative min-w-[180px] flex-1"><Search size={15} className="absolute top-3.5 left-3 text-[var(--muted)]"/><input className="input-base !pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search students…")} aria-label={t("Search students…")}/></label>
+        <select className="input-base !w-auto" value={filter} onChange={(event) => setFilter(event.target.value)} aria-label={t("Filter by signal")}>{[["all","All signals"],["needs_support","Needs support"],["watch","Watch"],["on_track","On track"],["insufficient_data","Collecting data"]].map(([value,label]) => <option key={value} value={value}>{t(label)}</option>)}</select>
+        <Link href="/attendance" className="btn-secondary">{t("Attendance")}</Link>
+        <button type="button" className="btn-secondary" onClick={exportSignals}><Download size={15}/>{t("Export filtered CSV")}</button>
       </div>
       <div className="mt-5 table-wrap"><table className="table-base min-w-[720px]">
-        <thead><tr><th>Student</th><th>Attendance</th><th>Submissions</th><th>Released quiz avg.</th><th>Support signal</th><th>Action</th></tr></thead>
+        <thead><tr><th>{t("Student")}</th><th>{t("Attendance")}</th><th>{t("Submissions")}</th><th>{t("Released quiz avg.")}</th><th>{t("Support signal")}</th><th>{t("Action")}</th></tr></thead>
         <tbody>{displayed.map((person) => <tr key={person.id}>
           <td><div className="font-semibold">{person.name}</div><div className="text-xs text-[var(--muted)]">{person.email}</div></td>
           <td>{percent(person.attendancePercent)}</td><td>{percent(person.submissionPercent)}</td><td>{percent(person.quizPercent)}</td>
@@ -134,7 +138,7 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
       <div className="mt-3 flex flex-wrap gap-2"><button className="btn-primary" disabled={saving || note.trim().length < 3} onClick={saveIntervention}>Save follow-up</button><button className="btn-secondary" onClick={() => setSelectedId("")}>Cancel</button></div>
     </section>}
     <section className="surface p-5 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">Faculty follow-ups</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Faculty follow-ups")}</h2>
         <p className="text-xs text-[var(--muted)]">{interventions.filter((item)=>item.status!=="resolved").length} active · {interventions.filter((item)=>item.status!=="resolved"&&item.follow_up_at&&Date.parse(item.follow_up_at)<nowMs).length} overdue</p>
       </div>
       <div className="mt-4 space-y-3">{interventions.length === 0 && <p className="text-xs text-[var(--muted)]">No support plans have been recorded yet.</p>}
@@ -168,6 +172,8 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
 
 function SupportRuleEditor({initial,available}:{initial:SupportRules;available:boolean}){
   const [values,setValues]=useState<SupportRules>(initial);
+  const language=useUiLanguage();
+  const t=(label:string)=>translateUi(label,language);
   const [busy,setBusy]=useState(false);
   const router=useRouter();
   const fields:{key:keyof SupportRules;label:string;max:number}[]=[
@@ -194,7 +200,7 @@ function SupportRuleEditor({initial,available}:{initial:SupportRules;available:b
     }finally{setBusy(false);}
   }
   return <details className="surface p-4 sm:p-6">
-    <summary className="cursor-pointer text-sm font-semibold">Configure explainable support signals (college administrators)</summary>
+    <summary className="cursor-pointer text-sm font-semibold">{t("Configure explainable support signals (college administrators)")}</summary>
     <p className="mt-2 text-xs leading-5 text-[var(--muted)]">These rules identify students for faculty support only. They never alter official grades or make automated high-stakes decisions.</p>
     {!available?<p className="mt-3 text-xs text-amber-600" role="alert">Apply SQL migration 035 before saving college-wide rules.</p>:<>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{fields.map(({key,label,max})=>

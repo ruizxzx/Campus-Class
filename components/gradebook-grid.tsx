@@ -4,6 +4,8 @@ import { useState } from "react";
 import { validGradeWeights, weightedRecordedIndex, type GradeWeights } from "@/lib/gradebook-policy";
 import { Download, GraduationCap, ShieldCheck, Printer, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
+import { useUiLanguage } from "@/lib/use-ui-language";
+import { translateUi } from "@/lib/ui-language";
 
 type Column = { key: string; title: string; type: string; maxMarks: number };
 type Row = { id: string; name: string; scores: (number | null)[]; attendance: number | null };
@@ -13,6 +15,8 @@ export function GradebookGrid({ classes, classId, columns, rows, staff, weights,
   weights: GradeWeights | null; canEditPolicy:boolean; policyAvailable:boolean;
 }) {
   const router = useRouter();
+  const language=useUiLanguage();
+  const t=(label:string)=>translateUi(label,language);
   const avg = rows.flatMap((row) => row.scores.map((score,index) => score === null ? null :
     columns[index]?.maxMarks > 0 ? Math.min(100,score / columns[index].maxMarks * 100) : null))
     .filter((item): item is number => item !== null);
@@ -56,29 +60,29 @@ export function GradebookGrid({ classes, classId, columns, rows, staff, weights,
 
   return <div className="space-y-5 gradebook-print">
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <div className="surface p-5"><p className="text-xs text-[var(--muted)]">Learners</p><p className="mt-3 text-3xl font-bold">{rows.length}</p></div>
-      <div className="surface p-5"><p className="text-xs text-[var(--muted)]">Published assessments</p><p className="mt-3 text-3xl font-bold">{columns.length}</p></div>
-      <div className="surface p-5"><p className="text-xs text-[var(--muted)]">Recorded-score average</p><p className="mt-3 text-3xl font-bold">{overall === null ? "—" : overall + "%"}</p></div>
-      <div className="surface p-5"><p className="text-xs text-[var(--muted)]">Class weighted index</p><p className="mt-3 text-3xl font-bold">{weightedClassAverage===null?"—":weightedClassAverage+"%"}</p>
-        <p className="mt-1 text-[10px] text-[var(--muted)]">{weights?"Recorded released evidence only":"Not configured"}</p></div>
+      <div className="surface p-5"><p className="text-xs text-[var(--muted)]">{t("Learners")}</p><p className="mt-3 text-3xl font-bold">{rows.length}</p></div>
+      <div className="surface p-5"><p className="text-xs text-[var(--muted)]">{t("Published assessments")}</p><p className="mt-3 text-3xl font-bold">{columns.length}</p></div>
+      <div className="surface p-5"><p className="text-xs text-[var(--muted)]">{t("Recorded-score average")}</p><p className="mt-3 text-3xl font-bold">{overall === null ? "—" : overall + "%"}</p></div>
+      <div className="surface p-5"><p className="text-xs text-[var(--muted)]">{t("Class weighted index")}</p><p className="mt-3 text-3xl font-bold">{weightedClassAverage===null?"—":weightedClassAverage+"%"}</p>
+        <p className="mt-1 text-[10px] text-[var(--muted)]">{weights?"Recorded released evidence only":t("Not configured")}</p></div>
     </div>
     <section className="surface min-w-0 overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-6">
-        <div><h2 className="flex items-center gap-2 text-base font-semibold"><GraduationCap size={19}/>Gradebook</h2><p className="mt-1 text-xs text-[var(--muted)]">Blank scores are not counted as zeros.</p></div>
-        <div className="flex flex-wrap gap-2"><select value={classId} className="input-base !w-auto max-w-full" aria-label="Choose class" onChange={(event) => router.push("/gradebook?class_id=" + encodeURIComponent(event.target.value))}>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+        <div><h2 className="flex items-center gap-2 text-base font-semibold"><GraduationCap size={19}/>{t("Gradebook")}</h2><p className="mt-1 text-xs text-[var(--muted)]">{t("Blank scores are not counted as zeros.")}</p></div>
+        <div className="flex flex-wrap gap-2"><select value={classId} className="input-base !w-auto max-w-full" aria-label={t("Choose class")} onChange={(event) => router.push("/gradebook?class_id=" + encodeURIComponent(event.target.value))}>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
           {staff && <button type="button" className="btn-secondary" onClick={exportCsv}><Download size={15}/>CSV</button>}
-          {staff && <button type="button" className="btn-secondary" onClick={()=>window.print()}><Printer size={15}/>Print</button>}
+          {staff && <button type="button" className="btn-secondary" onClick={()=>window.print()}><Printer size={15}/>{t("Print")}</button>}
         </div>
       </div>
       <div className="table-wrap"><table className="table-base min-w-[540px]">
-        <thead><tr><th>Student</th><th>Attendance</th><th>Released average</th>{weights&&<th>Weighted index</th>}{columns.map((column) => <th key={column.key}><div className="max-w-44 whitespace-normal">{column.title}</div><span className="text-[10px] font-normal capitalize">{column.type} · /{column.maxMarks}</span></th>)}</tr></thead>
+        <thead><tr><th>{t("Student")}</th><th>{t("Attendance")}</th><th>{t("Released average")}</th>{weights&&<th>{t("Weighted index")}</th>}{columns.map((column) => <th key={column.key}><div className="max-w-44 whitespace-normal">{column.title}</div><span className="text-[10px] font-normal capitalize">{column.type} · /{column.maxMarks}</span></th>)}</tr></thead>
         <tbody>{rows.map((row) => <tr key={row.id}><td className="font-semibold">{row.name}</td><td>{row.attendance === null ? "—" : row.attendance + "%"}</td><td>{learnerAverage(row) === null ? "—" : learnerAverage(row) + "%"}</td>{weights&&<td>{weightedIndex(row)===null?"—":weightedIndex(row)+"%"}</td>}{columns.map((column,index) => <td key={column.key} className="tabular-nums">{row.scores[index] === null ? "—" : row.scores[index]}</td>)}</tr>)}</tbody>
-      </table>{rows.length === 0 && <p className="p-6 text-sm text-[var(--muted)]">No students are enrolled in this class.</p>}</div>
+      </table>{rows.length === 0 && <p className="p-6 text-sm text-[var(--muted)]">{t("No students are enrolled in this class.")}</p>}</div>
     </section>
     {canEditPolicy && <PolicyEditor key={classId} classId={classId} initial={weights} available={policyAvailable}/>}
     <section className="surface p-5 sm:p-6">
-      <h2 className="text-sm font-semibold">Recorded learner score distribution</h2>
-      <p className="mt-1 text-[11px] text-[var(--muted)]">{weights?"Configured weighted index":"Arithmetic mean of released assessment scores"}. Missing and unreleased scores are excluded.</p>
+      <h2 className="text-sm font-semibold">{t("Recorded learner score distribution")}</h2>
+      <p className="mt-1 text-[11px] text-[var(--muted)]">{weights?t("Configured weighted index"):t("Arithmetic mean of released assessment scores")}. Missing and unreleased scores are excluded.</p>
       <div className="mt-4 grid gap-3">{bands.map((band)=>{
         const count=reportedScores.filter((value)=>value>=band.low&&value<band.high).length;
         const percent=reportedScores.length?Math.round(count/reportedScores.length*100):0;
@@ -103,13 +107,15 @@ function PolicyEditor({classId,initial,available}:{
   classId:string;initial:GradeWeights|null;available:boolean;
 }){
   const [values,setValues]=useState<GradeWeights>(initial??defaultWeights);
+  const language=useUiLanguage();
+  const t=(label:string)=>translateUi(label,language);
   const [busy,setBusy]=useState(false);
   const router=useRouter();
   const fields:{key:keyof GradeWeights;label:string}[]=[
-    {key:"assignment_weight",label:"Assignments"},
-    {key:"project_weight",label:"Projects"},
-    {key:"quiz_weight",label:"Quizzes/exams"},
-    {key:"attendance_weight",label:"Attendance"},
+    {key:"assignment_weight",label:t("Assignments")},
+    {key:"project_weight",label:t("Projects")},
+    {key:"quiz_weight",label:t("Quizzes/exams")},
+    {key:"attendance_weight",label:t("Attendance")},
   ];
   const valid=validGradeWeights(values);
   async function save(reset=false){
@@ -130,7 +136,7 @@ function PolicyEditor({classId,initial,available}:{
     finally{setBusy(false);}
   }
   return <section className="surface p-5 sm:p-6">
-    <h2 className="flex items-center gap-2 text-sm font-semibold"><SlidersHorizontal size={16}/>Class grading policy</h2>
+    <h2 className="flex items-center gap-2 text-sm font-semibold"><SlidersHorizontal size={16}/>{t("Class grading policy")}</h2>
     <p className="mt-1 text-xs leading-6 text-[var(--muted)]">Optional and staff-controlled. A weighted index appears only after you save a policy. Use 0% to exclude a category. Changes affect the indicative index, never official released marks.</p>
     {!available?<p role="alert" className="mt-3 text-xs text-amber-600">Apply SQL migration 034 in Supabase before configuring class grading weights.</p>:<>
       <div className="mt-4 grid gap-3 sm:grid-cols-4">{fields.map(({key,label})=><label key={key} className="text-xs font-medium">
@@ -141,9 +147,9 @@ function PolicyEditor({classId,initial,available}:{
       </label>)}</div>
       <p className="mt-3 text-xs" aria-live="polite">Total: {fields.reduce((sum,{key})=>sum+values[key],0).toFixed(2)}% {valid?"":"· Must equal 100%"}</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className="btn-primary" disabled={busy||!valid} onClick={()=>save(false)}>Save weights</button>
+        <button type="button" className="btn-primary" disabled={busy||!valid} onClick={()=>save(false)}>{t("Save weights")}</button>
         {initial&&<button type="button" className="btn-secondary" disabled={busy}
-          onClick={()=>{if(window.confirm("Remove the class weighting policy? Scores remain unchanged."))void save(true);}}>Remove policy</button>}
+          onClick={()=>{if(window.confirm("Remove the class weighting policy? Scores remain unchanged."))void save(true);}}>{t("Remove policy")}</button>}
       </div>
     </>}
   </section>;
