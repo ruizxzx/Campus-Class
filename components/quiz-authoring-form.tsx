@@ -66,11 +66,11 @@ export function QuizAuthoringForm({ classes }: { classes: ClassItem[] }) {
   function fromDraft(draft: QuestionDraft) {
     const options = draft.type === "true_false" ? ["True","False"]
       : draft.type === "short_answer" ? []
-      : draft.options.split("\\n").map((value)=>value.trim()).filter(Boolean);
+      : draft.options.split("\n").map((value)=>value.trim()).filter(Boolean);
     return {
       question_type: draft.type, prompt: draft.prompt.trim(), options,
       answer_key: draft.type === "short_answer" ? null
-        : draft.type === "multiple_select" ? draft.answer.split("\\n").map((value)=>value.trim()).filter(Boolean)
+        : draft.type === "multiple_select" ? draft.answer.split("\n").map((value)=>value.trim()).filter(Boolean)
         : draft.answer,
       marks: Number(draft.marks),
     };
@@ -98,8 +98,8 @@ export function QuizAuthoringForm({ classes }: { classes: ClassItem[] }) {
   function addFromBank(item: BankQuestion) {
     if (questions.length >= 100) return toast.error("A quiz supports at most 100 questions.");
     const draft: QuestionDraft = {
-      type: item.question_type, prompt: item.prompt, options: item.options.join("\\n"),
-      answer: Array.isArray(item.answer_key) ? item.answer_key.join("\\n") : item.answer_key ?? "",
+      type: item.question_type, prompt: item.prompt, options: item.options.join("\n"),
+      answer: Array.isArray(item.answer_key) ? item.answer_key.join("\n") : item.answer_key ?? "",
       marks: String(item.marks),
     };
     setQuestions((current) => {
