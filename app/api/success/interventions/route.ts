@@ -6,8 +6,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("create"), class_id: z.string().uuid(), student_id: z.string().uuid(),
-    reason: z.enum(["attendance","missing_work","low_scores","support","other"]), note: z.string().trim().min(3).max(3000) }),
+    reason: z.enum(["attendance","missing_work","low_scores","support","other"]), note: z.string().trim().min(3).max(3000),
+    action_plan: z.string().trim().max(3000).optional(),
+    follow_up_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() }),
   z.object({ action: z.literal("resolve"), id: z.string().uuid() }),
+  z.object({ action: z.literal("update"), id: z.string().uuid(),
+    status: z.enum(["open","in_progress","resolved"]),
+    action_plan: z.string().trim().max(3000).optional(),
+    follow_up_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    outcome_note: z.string().trim().max(3000).optional() }),
 ]);
 export async function POST(request: Request) {
   const context = await requestProfile();
@@ -19,7 +26,7 @@ export async function POST(request: Request) {
   const db = createAdminClient();
   const collegeId = context.profile.college_id;
   let classId = body.action === "create" ? body.class_id : null;
-  if (body.action === "resolve") {
+  if (body.action !== "create") {
     const { data: item, error } = await db.from("student_interventions")
       .select("id,class_id").eq("id", body.id).eq("college_id", collegeId).maybeSingle();
     if (error) return NextResponse.json({ error: "Unable to find the intervention." }, { status: 503 });
@@ -44,16 +51,29 @@ export async function POST(request: Request) {
     const { error } = await db.from("student_interventions").insert({
       college_id: collegeId, class_id: classId, student_id: body.student_id,
       created_by: context.userId, reason: body.reason, note: body.note,
+      action_plan: body.action_plan ?? null,
+      follow_up_at: body.follow_up_at ?? null,
     });
     if (error) {
       console.error("Intervention creation failed", { code: error.code });
       return NextResponse.json({ error: "Could not record this follow-up." }, { status: 503 });
     }
   } else {
-    const { error } = await db.from("student_interventions").update({
-      status: "resolved", updated_at: new Date().toISOString(),
-    }).eq("id", body.id).eq("college_id", collegeId);
-    if (error) return NextResponse.json({ error: "Could not resolve this follow-up." }, { status: 503 });
+    const status = body.action === "resolve" ? "resolved" : body.status;
+    const changes = {
+      status,
+      updated_at: new Date().toISOString(),
+      resolved_at: status === "resolved" ? new Date().toISOString() : null,
+      ...(body.action === "update" && body.action_plan !== undefined
+        ? { action_plan: body.action_plan } : {}),
+      ...(body.action === "update" && body.follow_up_at !== undefined
+        ? { follow_up_at: body.follow_up_at } : {}),
+      ...(body.action === "update" && body.outcome_note !== undefined
+        ? { outcome_note: body.outcome_note } : {}),
+    };
+    const { error } = await db.from("student_interventions").update(changes)
+      .eq("id", body.id).eq("college_id", collegeId);
+    if (error) return NextResponse.json({ error: "Could not update this faculty follow-up." }, { status: 503 });
   }
   return NextResponse.json({ success: true });
 }

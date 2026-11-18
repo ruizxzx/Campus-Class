@@ -153,8 +153,21 @@ export async function DELETE(request: Request) {
       .maybeSingle();
     if (!permission) return NextResponse.json({ error: "You are not assigned to this class." }, { status: 403 });
   }
-  await admin.storage.from("class-syllabi").remove([syllabus.storage_path]);
+  // Delete metadata first. If the database refuses the delete, the original
+  // PDF must remain available; an orphaned file is safer than a broken record.
   const { error } = await admin.from("class_syllabi").delete().eq("id", id).eq("college_id", context.profile.college_id);
-  if (error) return NextResponse.json({ error: "Could not delete the syllabus." }, { status: 500 });
-  return NextResponse.json({ success: true });
+  if (error) {
+    console.error("Syllabus delete failed", { code: error.code });
+    return NextResponse.json({
+      error: error.code === "42501"
+        ? "The server cannot delete syllabus records. Apply the syllabus service-role permission patch."
+        : "Could not delete the syllabus record. The uploaded PDF was preserved.",
+    }, { status: error.code === "42501" ? 503 : 500 });
+  }
+  const { error: cleanupError } = await admin.storage.from("class-syllabi").remove([syllabus.storage_path]);
+  if (cleanupError) {
+    console.error("Syllabus storage cleanup pending", { code: cleanupError.status });
+    return NextResponse.json({ success: true, storageCleanupPending: true });
+  }
+  return NextResponse.json({ success: true, storageCleanupPending: false });
 }

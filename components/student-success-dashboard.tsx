@@ -7,7 +7,8 @@ import Link from "next/link";
 import type { StudentSignal } from "@/lib/student-success";
 
 type Student = StudentSignal & { id: string; name: string; email: string };
-type Intervention = { id: string; student_id: string; reason: string; note: string; status: string; created_at: string };
+type Intervention = { id: string; student_id: string; reason: string; note: string; status: string; created_at: string;
+  action_plan: string | null; follow_up_at: string | null; outcome_note: string | null; resolved_at: string | null };
 export function StudentSuccessDashboard({ classId, classes, students, interventions }: {
   classId: string; classes: { id: string; name: string }[]; students: Student[]; interventions: Intervention[];
 }) {
@@ -17,6 +18,9 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
   const [selectedId, setSelectedId] = useState("");
   const [reason, setReason] = useState("support");
   const [note, setNote] = useState("");
+  const [actionPlan, setActionPlan] = useState("");
+  const [followUpDate, setFollowUpDate] = useState("");
+  const [outcomeDrafts, setOutcomeDrafts] = useState<Record<string,string>>({});
   const [saving, setSaving] = useState(false);
   const displayed = useMemo(() => students.filter((person) => (filter === "all" || person.level === filter)
     && (person.name + " " + person.email).toLowerCase().includes(search.toLowerCase())), [students,filter,search]);
@@ -31,27 +35,36 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
     try {
       const response = await fetch("/api/success/interventions", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", class_id: classId, student_id: selectedId, reason, note }),
+        body: JSON.stringify({ action: "create", class_id: classId, student_id: selectedId, reason, note,
+          action_plan: actionPlan, follow_up_at: followUpDate || null }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.error ?? "Unable to save intervention.");
-      setSelectedId(""); setNote("");
+      setSelectedId(""); setNote(""); setActionPlan(""); setFollowUpDate("");
       toast.success("Faculty follow-up recorded.");
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save follow-up.");
     } finally { setSaving(false); }
   }
-  async function resolve(id: string) {
+  async function updateStatus(id: string, status: "open" | "in_progress" | "resolved") {
+    const outcome = (outcomeDrafts[id] ?? "").trim();
+    if (status === "resolved" && outcome.length < 3) {
+      toast.error("Add an outcome note before resolving this follow-up.");
+      return;
+    }
     setSaving(true);
     try {
       const response = await fetch("/api/success/interventions", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "resolve", id }),
+        body: JSON.stringify({ action: "update", id, status,
+          ...(outcome.length ? { outcome_note: outcome } : {}) }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error ?? "Could not resolve follow-up.");
-      toast.success("Follow-up resolved."); router.refresh();
+      if (!response.ok) throw new Error(data?.error ?? "Could not update the follow-up.");
+      setOutcomeDrafts((current) => ({ ...current, [id]: "" }));
+      toast.success(status === "resolved" ? "Follow-up resolved with an outcome." : "Follow-up moved to in progress.");
+      router.refresh();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Update failed."); }
     finally { setSaving(false); }
   }
@@ -92,15 +105,42 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
         <input disabled className="input-base" value={students.find((person) => person.id === selectedId)?.name ?? "Student"} aria-label="Selected student"/>
         <select className="input-base" value={reason} onChange={(event) => setReason(event.target.value)} aria-label="Reason">{["support","attendance","missing_work","low_scores","other"].map((item) => <option key={item} value={item}>{item.replaceAll("_"," ")}</option>)}</select>
       </div>
-      <textarea className="input-base mt-3 min-h-24" maxLength={3000} placeholder="Support plan and next action…" value={note} onChange={(event) => setNote(event.target.value)}/>
+      <label className="mt-3 block text-xs font-semibold">Observation
+        <textarea className="input-base mt-2 min-h-24" maxLength={3000} placeholder="Academic evidence and reason for support…" value={note} onChange={(event) => setNote(event.target.value)}/>
+      </label>
+      <label className="mt-3 block text-xs font-semibold">Action plan
+        <textarea className="input-base mt-2 min-h-20" maxLength={3000} placeholder="Agreed support steps…" value={actionPlan} onChange={(event) => setActionPlan(event.target.value)}/>
+      </label>
+      <label className="mt-3 block text-xs font-semibold">Follow-up date
+        <input type="date" className="input-base mt-2" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)}/>
+      </label>
       <div className="mt-3 flex flex-wrap gap-2"><button className="btn-primary" disabled={saving || note.trim().length < 3} onClick={saveIntervention}>Save follow-up</button><button className="btn-secondary" onClick={() => setSelectedId("")}>Cancel</button></div>
     </section>}
     <section className="surface p-5 sm:p-6">
       <h2 className="text-sm font-semibold">Faculty follow-ups</h2>
       <div className="mt-4 space-y-3">{interventions.length === 0 && <p className="text-xs text-[var(--muted)]">No support plans have been recorded yet.</p>}
       {interventions.map((item) => <div key={item.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[var(--line)] p-3">
-        <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{students.find((person) => person.id === item.student_id)?.name ?? "Student"} · {item.reason.replaceAll("_"," ")}</p><p className="mt-2 whitespace-pre-wrap text-xs leading-6">{item.note}</p><p className="mt-1 text-[10px] text-[var(--muted)]">{new Date(item.created_at).toLocaleString()}</p></div>
-        <div className="flex items-center gap-2"><span className="status-pill">{item.status}</span>{item.status !== "resolved" && <button type="button" disabled={saving} className="btn-secondary !p-2" onClick={() => resolve(item.id)}>Resolve</button>}</div>
+        <div className="min-w-0 flex-1"><p className="text-xs font-semibold">{students.find((person) => person.id === item.student_id)?.name ?? "Student"} · {item.reason.replaceAll("_"," ")}</p>
+          <p className="mt-2 whitespace-pre-wrap text-xs leading-6">{item.note}</p>
+          {item.action_plan && <p className="mt-2 whitespace-pre-wrap text-xs"><strong>Action plan:</strong> {item.action_plan}</p>}
+          {item.follow_up_at && <p className="mt-2 text-xs text-[var(--muted)]">Follow up by {item.follow_up_at}</p>}
+          {item.outcome_note && <p className="mt-2 whitespace-pre-wrap text-xs"><strong>Outcome:</strong> {item.outcome_note}</p>}
+          <p className="mt-1 text-[10px] text-[var(--muted)]">{new Date(item.created_at).toLocaleString()}</p>
+          {item.status !== "resolved" && <div className="mt-3 space-y-2">
+            <label className="block text-xs font-semibold">Outcome note
+              <textarea className="input-base mt-2 min-h-16" maxLength={3000}
+                value={outcomeDrafts[item.id] ?? ""}
+                onChange={(event) => setOutcomeDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
+                placeholder="Record the follow-up outcome before resolving"/>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {item.status === "open" && <button type="button" disabled={saving} className="btn-secondary !px-3 !py-2" onClick={() => updateStatus(item.id,"in_progress")}>Start follow-up</button>}
+              <button type="button" disabled={saving || (outcomeDrafts[item.id] ?? "").trim().length < 3}
+                className="btn-secondary !px-3 !py-2" onClick={() => updateStatus(item.id,"resolved")}>Resolve with outcome</button>
+            </div>
+          </div>}
+        </div>
+        <span className="status-pill">{item.status}</span>
       </div>)}</div>
     </section>
     <p className="flex items-start gap-2 text-xs leading-5 text-[var(--muted)]"><ShieldCheck size={17} className="shrink-0"/>Signals are descriptive and depend on available records. They must never be used as an automated decision about student eligibility, discipline, or grading.</p>

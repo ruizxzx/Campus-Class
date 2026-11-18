@@ -89,6 +89,8 @@ export async function POST(request: Request) {
       student_id: context.userId, recorded_by: context.userId, status: "present",
     });
     if (error?.code === "23505") return NextResponse.json({ success: true, alreadyCheckedIn: true });
+    if (error?.code === "23P01") return errorResponse("This attendance session has closed or expired.", 409);
+    if (error?.code === "42501") return errorResponse("Your active enrollment could not be verified.", 403);
     if (error) {
       console.error("Attendance check-in failed", { code: error.code });
       return errorResponse("Could not record attendance. Please try again.", 503);

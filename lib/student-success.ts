@@ -48,3 +48,35 @@ export function summarizeStudent(input: StudentSignalInput): StudentSignal {
     : "on_track";
   return { attendancePercent, submissionPercent, quizPercent, level, reasons, evidenceCount };
 }
+
+
+/**
+ * One valid released score per student and quiz: the latest released attempt.
+ * Unreleased/missing/invalid scores are absent, not silently treated as zero.
+ */
+export function releasedQuizEvidence(
+  attempts: { student_id: string; quiz_id: string; attempt_number: number; score: number | string | null }[],
+  maxMarksByQuiz: Map<string, number>,
+): Map<string, number[]> {
+  const last = new Map<string, { studentId: string; number: number; percent: number }>();
+  for (const attempt of attempts) {
+    const max = maxMarksByQuiz.get(attempt.quiz_id);
+    const score = attempt.score === null ? NaN : Number(attempt.score);
+    if (!max || !Number.isFinite(max) || max <= 0 || !Number.isFinite(score)
+      || score < 0 || score > max || !Number.isInteger(attempt.attempt_number)
+      || attempt.attempt_number < 1) continue;
+    const key = attempt.student_id + ":" + attempt.quiz_id;
+    const previous = last.get(key);
+    if (!previous || attempt.attempt_number > previous.number) {
+      last.set(key, { studentId: attempt.student_id, number: attempt.attempt_number,
+        percent: Math.round(score / max * 10000) / 100 });
+    }
+  }
+  const byStudent = new Map<string, number[]>();
+  for (const item of last.values()) {
+    const values = byStudent.get(item.studentId) ?? [];
+    values.push(item.percent);
+    byStudent.set(item.studentId, values);
+  }
+  return byStudent;
+}

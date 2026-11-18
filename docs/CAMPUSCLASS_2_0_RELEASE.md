@@ -75,6 +75,81 @@ Prior permission fixes if missing:
       and tablename in ('attendance_sessions','attendance_records',
                         'student_interventions','quiz_attempt_sessions','course_outcomes');
 
+## 2.0 integrity and AI quota addendum (2026-11-18)
+
+**Additional forward-only patches — run manually in order after 028:**
+
+4. `202611180029_attendance_quiz_database_integrity.sql`
+   - Database-clock attendance creation and check-in validity, active-enrollment
+     validation, session row locks during check-in/closure, correction audit table.
+   - Immutable quiz-session timing and assignment/enrollment checks in SQL.
+   - The existing quiz submission guard now evaluates expiry with the actual
+     database clock rather than the transaction-start timestamp.
+   - Requires migrations 026–028 and existing quiz/attendance tables.
+   - No existing student records are modified or dropped.
+
+5. `202611180030_ai_request_quota.sql`
+   - Atomic per-user, per-college budget of 30 paid OpenRouter requests per UTC hour.
+   - Server-only RPC, RLS-protected usage data, no browser visibility.
+   - Requires patch 029 and existing college/profile tables.
+   - **Compatibility:** the updated OpenRouter client refuses AI requests until
+     this patch is applied. Apply on staging first, then coordinate production
+     deployment and SQL application. Other features do not depend on the quota RPC.
+   - No existing AI settings or provider keys are changed.
+
+**Read-only verification SQL** (run after both patches):
+
+```sql
+select to_regclass('public.attendance_correction_audit') is not null as audit_table_ready,
+       to_regclass('public.ai_request_usage') is not null as ai_quota_table_ready,
+       to_regprocedure('public.consume_ai_request_quota(uuid,uuid)') is not null as ai_quota_rpc_ready;
+select tgname, tgenabled from pg_trigger
+ where tgname in ('campusclass_attendance_session_clock',
+                  'campusclass_attendance_record_guard',
+                  'campusclass_attendance_correction_audit',
+                  'campusclass_quiz_attempt_session_guard');
+select has_function_privilege('service_role',
+           'public.consume_ai_request_quota(uuid,uuid)', 'EXECUTE') as server_can_charge_quota,
+       has_function_privilege('authenticated',
+           'public.consume_ai_request_quota(uuid,uuid)', 'EXECUTE') as browser_cannot_charge_quota;
+```
+
+The `server_can_charge_quota` result must be true and
+`browser_cannot_charge_quota` must be false. Confirm all four triggers are
+enabled. Do NOT run a quota RPC as a read-only verification; it changes usage.
+
+**Staging regression scenarios:** a QR check-in delayed until after expiry must
+fail with HTTP 409, staff corrections must create audit rows, and simultaneous
+check-ins must never create duplicates. Try to extend a quiz draft expiry via a
+direct service-role staging request; the DB must reject the update. Confirm
+draft saves after expiry are blocked, and that hour 31's AI request is rejected
+without calling OpenRouter. Verify cross-college and unassigned faculty attempts
+against both the API and the RLS policy in an isolated staging database.
+
+**Failure and recovery:** both patches use transactions; a failed script should
+roll back all changes inside that script. Correct prerequisites or permissions,
+then retry that same patch after inspecting the error. There is no destructive
+production rollback; disable any new application route dependent on a failed
+migration until the prerequisite is fixed. Avoid removing the audit log or quota
+table if they contain real data. For a failed syllabus metadata deletion, the PDF
+now remains available. If metadata deletion succeeded but Storage cleanup failed,
+the API reports `storageCleanupPending`; inspect the orphaned object manually
+and remove it only after confirming no metadata row references it.
+
+6. `202611180031_intervention_followups.sql`
+   - Optional action plans, due dates, recorded outcomes and resolution time.
+   - Apply after patch 030, then deploy the revised Student Success UI and API.
+   - Existing interventions are retained with their new fields initially NULL.
+   - Verify with: `select column_name from information_schema.columns where
+     table_schema='public' and table_name='student_interventions' and
+     column_name in ('action_plan','follow_up_at','outcome_note','resolved_at');`
+
+**Known limitation:** the SQL trigger and RLS assertions are supplied as
+`supabase/tests/campusclass_20_hardening.test.sql`, but require a disposable
+database with all ordered migrations. GitHub CI does not run a Supabase service
+or browser E2E suite; a passing GitHub build is not production acceptance.
+
+
 ## Manual staging acceptance checklist
 
 - Test two fictional colleges, each with an admin, faculty and student account.

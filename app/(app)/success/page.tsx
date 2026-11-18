@@ -3,7 +3,32 @@ import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
 import { StudentSuccessDashboard } from "@/components/student-success-dashboard";
-import { summarizeStudent } from "@/lib/student-success";
+import { summarizeStudent, releasedQuizEvidence } from "@/lib/student-success";
+
+
+// PostgREST is often configured to cap a response at 1,000 rows. Page through
+// the selected class only, never infer student support signals from truncated
+// college-wide arrays. Stop rather than silently calculate partial evidence.
+type EvidencePage<T> = { data: T[] | null; error: { code: string } | null };
+async function collectEvidence<T>(
+  ids: string[],
+  fetchPage: (batch: string[], from: number, to: number) => Promise<EvidencePage<T>>,
+): Promise<{ data: T[]; error: { code: string } | null; truncated: boolean }> {
+  const rows: T[] = [];
+  for (let index = 0; index < ids.length; index += 50) {
+    const batch = ids.slice(index, index + 50);
+    let ended = false;
+    for (let offset = 0; offset < 50000; offset += 1000) {
+      const result = await fetchPage(batch, offset, offset + 999);
+      if (result.error) return { data: rows, error: result.error, truncated: false };
+      const batchRows = result.data ?? [];
+      rows.push(...batchRows);
+      if (batchRows.length < 1000) { ended = true; break; }
+    }
+    if (!ended) return { data: rows, error: null, truncated: true };
+  }
+  return { data: rows, error: null, truncated: false };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -34,22 +59,36 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   </>;
 
   const classId = classroom.id;
-  const [rosterResult, assignmentsResult, submissionResult, quizResult, attemptsResult, sessionsResult, recordsResult, interventionsResult] = await Promise.all([
+  const [rosterResult, assignmentsResult, quizResult, sessionsResult, recordsResult, interventionsResult] = await Promise.all([
     db.from("class_enrollments").select("student_id").eq("college_id", collegeId).eq("class_id", classId).eq("status", "active").limit(1000),
     db.from("assignments").select("id,due_at").eq("college_id", collegeId).eq("class_id", classId).eq("status", "published").limit(1000),
-    db.from("assignment_submissions").select("assignment_id,student_id").eq("college_id", collegeId).limit(5000),
     db.from("quizzes").select("id,max_marks").eq("college_id", collegeId).eq("class_id", classId).limit(1000),
-    db.from("quiz_attempts").select("quiz_id,student_id,score,released_at").eq("college_id", collegeId).not("released_at", "is", null).limit(5000),
     db.from("attendance_sessions").select("id,expires_at,closed_at").eq("college_id", collegeId).eq("class_id", classId).limit(1000),
     db.from("attendance_records").select("session_id,student_id,status").eq("college_id", collegeId).eq("class_id", classId).limit(5000),
-    db.from("student_interventions").select("id,student_id,reason,note,status,created_at").eq("college_id", collegeId).eq("class_id", classId).order("created_at", { ascending: false }).limit(500),
+    db.from("student_interventions").select("id,student_id,reason,note,status,created_at,action_plan,follow_up_at,outcome_note,resolved_at").eq("college_id", collegeId).eq("class_id", classId).order("created_at", { ascending: false }).limit(500),
+  ]);
+  const assignmentIdList = (assignmentsResult.data ?? []).map((item) => item.id);
+  const quizIds = (quizResult.data ?? []).map((item) => item.id);
+  const [submissionResult, attemptsResult] = await Promise.all([
+    collectEvidence<{ assignment_id: string; student_id: string }>(assignmentIdList, async (batch, from, to) =>
+      db.from("assignment_submissions").select("assignment_id,student_id")
+        .eq("college_id", collegeId).in("assignment_id", batch).order("id").range(from,to)),
+    collectEvidence<{ quiz_id: string; student_id: string; score: number | null; attempt_number: number }>(quizIds, async (batch, from, to) =>
+      db.from("quiz_attempts").select("quiz_id,student_id,score,attempt_number")
+        .eq("college_id", collegeId).in("quiz_id", batch)
+        .not("released_at", "is", null).order("id").range(from,to)),
   ]);
   const errors = [rosterResult,assignmentsResult,submissionResult,quizResult,attemptsResult,sessionsResult,recordsResult,interventionsResult]
     .filter((result) => Boolean(result.error));
-  if (errors.length) {
+  if (errors.length || submissionResult.truncated || attemptsResult.truncated
+    || (rosterResult.data?.length ?? 0) >= 1000
+    || (assignmentsResult.data?.length ?? 0) >= 1000
+    || (quizResult.data?.length ?? 0) >= 1000
+    || (sessionsResult.data?.length ?? 0) >= 1000
+    || (recordsResult.data?.length ?? 0) >= 5000) {
     console.error("Student success dataset failed", errors.map((result) => result.error?.code));
     return <><PageHeader title="Student Success Intelligence" description="Explainable early support signals, never automated academic penalties."/>
-      <div role="alert" className="surface border-amber-500 p-5 text-sm">Could not load academic indicators. Make sure the Campus Class 2.0 SQL migration is applied, then refresh.</div></>;
+      <div role="alert" className="surface border-amber-500 p-5 text-sm">Could not load a complete academic evidence set. Verify the SQL migrations and query limits before interpreting support signals.</div></>;
   }
   const studentIds = (rosterResult.data ?? []).map((item) => item.student_id);
   const { data: profiles, error: profileError } = studentIds.length
@@ -59,6 +98,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   const names = new Map((profiles ?? []).map((item) => [item.id, { name: item.full_name, email: item.email }]));
   const assignmentIds = new Set((assignmentsResult.data ?? []).map((item) => item.id));
   const quizMap = new Map((quizResult.data ?? []).map((quiz) => [quiz.id, Number(quiz.max_marks)]));
+  const releasedScores = releasedQuizEvidence(attemptsResult.data ?? [], quizMap);
   const sessions = (sessionsResult.data ?? []).filter((session) =>
     session.closed_at || Date.parse(session.expires_at) <= nowEpochMs());
   const sessionIds = new Set(sessions.map((session) => session.id));
@@ -70,9 +110,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     const attendance = new Set((recordsResult.data ?? [])
       .filter((item) => item.student_id === id && sessionIds.has(item.session_id) && ["present","late"].includes(item.status))
       .map((item) => item.session_id));
-    const scores = (attemptsResult.data ?? []).filter((item) => item.student_id === id && item.score !== null
-      && quizMap.has(item.quiz_id) && (quizMap.get(item.quiz_id) ?? 0) > 0)
-      .map((item) => Number(item.score) / (quizMap.get(item.quiz_id) ?? 100) * 100);
+    const scores = releasedScores.get(id) ?? [];
     const metrics = summarizeStudent({
       attendanceSessions: sessions.length, attendedSessions: attendance.size,
       assignedWork: assignmentIds.size, submittedWork: submittedIds.size,
