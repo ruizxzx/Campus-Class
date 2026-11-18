@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowUp, BrainCircuit, Sparkles } from "lucide-react";
+import { ArrowUp, BrainCircuit, Sparkles, Trash2 } from "lucide-react";
 
 type Reference = { id: string; type: string; title: string; href: string };
 type Message = { role: "user" | "assistant"; content: string; sources?: Reference[] };
@@ -20,12 +20,62 @@ export function AIStudyAssistant({ syllabi }: { syllabi: { id:string; title:stri
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<"chat" | "practice" | "revision">("chat");
   const [syllabusId, setSyllabusId] = useState("");
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyWarning, setHistoryWarning] = useState("");
+  const [clearing, setClearing] = useState(false);
+  const pendingRetry=useRef<{
+    text:string;mode:string;syllabusId:string;requestId:string
+  }|null>(null);
+
+  useEffect(()=>{
+    let alive=true;
+    async function restore(){
+      try{
+        const response=await fetch("/api/ai/study-history",{cache:"no-store"});
+        const result=await response.json() as {items?:{
+          question:string;answer:string;
+          sources?:Reference[];created_at:string;
+        }[];error?:string};
+        if(!response.ok)throw new Error(result.error??"Could not load saved study history.");
+        if(alive){
+          const restored=(result.items??[]).flatMap((item):Message[]=>[
+            {role:"user",content:item.question},
+            {role:"assistant",content:item.answer,sources:item.sources??[]},
+          ]);
+          setMessages((current)=>current.length?current:restored);
+          setHistoryWarning("");
+        }
+      }catch(error){
+        if(alive)setHistoryWarning(error instanceof Error?error.message:"History not available.");
+      }finally{if(alive)setHistoryLoaded(true);}
+    }
+    void restore();
+    return ()=>{alive=false;};
+  },[]);
+
+  async function clearHistory(){
+    if(clearing||!window.confirm("Permanently clear your saved AI study conversation?"))return;
+    setClearing(true);
+    try{
+      const response=await fetch("/api/ai/study-history",{method:"DELETE"});
+      const result=await response.json().catch(()=>({error:"Unreadable server response."})) as {error?:string};
+      if(!response.ok)throw new Error(result.error??"Could not clear history.");
+      pendingRetry.current=null;
+      setMessages([]);setHistoryWarning("");toast.success("Private study history cleared.");
+    }catch(error){toast.error(error instanceof Error?error.message:"Could not clear history.");}
+    finally{setClearing(false);}
+  }
+
 
   async function ask(event: React.FormEvent) {
     event.preventDefault();
     const text = question.trim();
     if (!text || sending) return;
     const history = messages.slice(-8).map(({ role, content }) => ({ role, content }));
+    const retry=pendingRetry.current;
+    const requestId=retry&&retry.text===text&&retry.mode===mode&&retry.syllabusId===syllabusId
+      ?retry.requestId:crypto.randomUUID();
+    pendingRetry.current={text,mode,syllabusId,requestId};
     setMessages((current) => [...current, { role: "user", content: text }]);
     setQuestion("");
     setSending(true);
@@ -33,11 +83,15 @@ export function AIStudyAssistant({ syllabi }: { syllabi: { id:string; title:stri
       const response = await fetch("/api/ai/study-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: text, history, mode, syllabus_id: syllabusId || null }),
+        body: JSON.stringify({ question: text, history, mode, syllabus_id: syllabusId || null, request_id: requestId }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "The study assistant could not answer.");
+      pendingRetry.current=null;
       setMessages((current) => [...current, { role: "assistant", content: result.answer, sources: result.sources ?? [] }]);
+      setHistoryWarning(result.history_saved===false
+        ?result.history_warning??"The answer was generated but could not be saved to private history."
+        :"");
     } catch (error) {
       setMessages((current) => current.filter((message, index) => !(index === current.length - 1 && message.role === "user" && message.content === text)));
       setQuestion(text);
@@ -51,9 +105,19 @@ export function AIStudyAssistant({ syllabi }: { syllabi: { id:string; title:stri
     <header className="flex items-center gap-3 border-b border-[var(--line)] p-5 sm:p-6">
       <div className="grid h-10 w-10 place-items-center rounded-2xl bg-[var(--green-soft)] text-[var(--green-strong)]"><BrainCircuit size={18}/></div>
       <div><h2 className="text-sm font-semibold">Campus AI Study Copilot</h2><p className="mt-1 text-[10px] text-[var(--muted)]">Grounded in accessible lessons, course notes, syllabus outlines and assignments.</p></div>
-      <span className="status-pill ml-auto hidden sm:inline-flex"><Sparkles size={11}/>College AI</span>
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        <span className="status-pill hidden sm:inline-flex"><Sparkles size={11}/>College AI</span>
+        <button type="button" className="btn-secondary !px-2.5 !py-2 text-[10px]"
+          disabled={clearing||sending||!messages.length||!historyLoaded}
+          onClick={()=>void clearHistory()} aria-label="Clear private AI chat history">
+          <Trash2 size={13}/>Clear
+        </button>
+      </div>
     </header>
 
+    {historyWarning&&<p role="alert" className="border-b border-amber-500/30 bg-amber-500/10 px-5 py-3 text-xs leading-5">
+      {historyWarning}
+    </p>}
     <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
       {!messages.length ? <div className="mx-auto max-w-xl py-10 text-center">
         <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[var(--surface-2)] text-[var(--green-strong)]"><Sparkles size={20}/></div>

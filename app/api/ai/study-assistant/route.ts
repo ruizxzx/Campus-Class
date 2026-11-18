@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { requestProfile, isResponse } from "@/lib/http";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -23,6 +24,25 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid study question." }, { status: 400 });
   }
+  // Replay a previously saved exchange before using paid AI tokens.
+  // Old callers without a client ID receive a fresh server-generated ID.
+  const requestId=parsed.data.request_id??randomUUID();
+  const historyDb=createAdminClient();
+  const {data:existing,error:replayError}=await historyDb.from("ai_study_exchanges")
+    .select("question,mode,syllabus_id,answer,sources")
+    .eq("college_id",context.profile.college_id).eq("student_id",context.userId)
+    .eq("request_id",requestId).maybeSingle();
+  const historyReady=!replayError;
+  if(replayError)console.error("Copilot replay database unavailable",{code:replayError.code});
+  if(existing){
+    if(existing.question!==parsed.data.question || existing.mode!==parsed.data.mode ||
+        (existing.syllabus_id??null)!==(parsed.data.syllabus_id??null)){
+      return NextResponse.json({error:"Request ID already belongs to a different study question."},{status:409});
+    }
+    return NextResponse.json({answer:existing.answer,sources:existing.sources,
+      mode:existing.mode,request_id:requestId,history_saved:true,replayed:true});
+  }
+
   const db = await createClient();
   const { data: enrollments, error: enrollmentError } = await db.from("class_enrollments")
     .select("class_id")
@@ -175,7 +195,41 @@ export async function POST(request: Request) {
     ], 1100);
     const used = sources.filter((item) => answer.includes("[" + item.id + "]"))
       .map(({ id, type, title, href }) => ({ id, type, title, href }));
-    return NextResponse.json({ answer, sources: used, mode: parsed.data.mode });
+    let historySaved=false;
+    let storedAnswer=answer;
+    let storedSources=used;
+    if(historyReady){
+      const {error:saveError}=await historyDb.from("ai_study_exchanges").insert({
+        college_id:context.profile.college_id,student_id:context.userId,
+        request_id:requestId,mode:parsed.data.mode,syllabus_id:parsed.data.syllabus_id??null,
+        question:parsed.data.question,answer,sources:used,
+      });
+      if(!saveError){
+        historySaved=true;
+      }else if(saveError.code==="23505"){
+        // A concurrent retry already committed; return the canonical saved answer.
+        const {data:saved,error:readError}=await historyDb.from("ai_study_exchanges")
+          .select("question,mode,syllabus_id,answer,sources")
+          .eq("college_id",context.profile.college_id).eq("student_id",context.userId)
+          .eq("request_id",requestId).maybeSingle();
+        if(!readError && saved && saved.question===parsed.data.question &&
+          saved.mode===parsed.data.mode &&
+          (saved.syllabus_id??null)===(parsed.data.syllabus_id??null)){
+          storedAnswer=saved.answer;
+          storedSources=saved.sources as typeof used;
+          historySaved=true;
+        }
+      }else {
+        console.error("Generated study response history could not be saved",{code:saveError.code});
+      }
+    }
+    // Preserve the generated response even if the database is temporarily
+    // unavailable; give the client an explicit warning, never claim persistence.
+    return NextResponse.json({
+      answer:storedAnswer,sources:storedSources,mode:parsed.data.mode,
+      request_id:requestId,history_saved:historySaved,
+      ...(historySaved?{}:{history_warning:"Answer generated, but private study history could not be saved. Apply SQL migration 037 or check the database connection."}),
+    });
   } catch (error) {
     if (error instanceof OpenRouterError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
