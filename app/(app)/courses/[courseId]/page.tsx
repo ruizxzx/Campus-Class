@@ -92,7 +92,7 @@ export default async function CourseDetail({ params }: { params: Promise<{ cours
               {totalDuration > 0 ? <span className="status-pill">{totalDuration} min total</span> : null}
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex w-full min-w-0 flex-col items-stretch gap-2 sm:w-[420px] sm:shrink-0">
             <AISummarizeButton resourceType="course" resourceId={courseId}/>
             <AIResourceAssistant resourceType="course" resourceId={courseId} compact />
           </div>
