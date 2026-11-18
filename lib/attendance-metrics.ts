@@ -55,11 +55,12 @@ export function weeklyAcademicTrends(
   attendanceRecords:readonly AttendanceEvidence[],
   quizReleases:readonly QuizReleaseEvidence[],
   maxMarksByQuiz:Map<string,number>,
-  enrolledStudentIds:readonly string[],
+  enrollments:readonly {student_id:string;enrolled_at:string}[],
   now:number,
 ):WeekSignal[]{
   const monday=mondayUtcMs(now);
-  const studentIds=new Set(enrolledStudentIds);
+  const enrolledAt=new Map(enrollments.map((item)=>[item.student_id,Date.parse(item.enrolled_at)]));
+  const studentIds=new Set(enrollments.map((item)=>item.student_id));
   const periods=Array.from({length:8},(_,index)=>monday-(7-index)*7*86400000);
   const completed=sessions.filter((session)=>{
     const start=Date.parse(session.starts_at);
@@ -80,15 +81,21 @@ export function weeklyAcademicTrends(
     const previous=best.get(key);
     if(!previous||percent>previous.score)best.set(key,{score:percent,releasedAt});
   }
-  return periods.map((weekStart,index)=>{
+  return periods.map((weekStart)=>{
     const next=weekStart+7*86400000;
     const weekSessions=completed.filter((session)=>{
       const start=Date.parse(session.starts_at);
       return start>=weekStart&&start<next;
     });
     const weekSessionIds=new Set(weekSessions.map((session)=>session.id));
+    const startBySession=new Map(weekSessions.map((session)=>[session.id,Date.parse(session.starts_at)]));
+    const isEligible=(studentId:string,sessionId:string)=>{
+      const joined=enrolledAt.get(studentId);
+      const started=startBySession.get(sessionId);
+      return joined!==undefined && Number.isFinite(joined) && started!==undefined && started>=joined;
+    };
     const currentRecords=attendanceRecords.filter((record)=>
-      weekSessionIds.has(record.session_id)&&studentIds.has(record.student_id));
+      weekSessionIds.has(record.session_id)&&isEligible(record.student_id,record.session_id));
     let present=0,excused=0;
     const tracked=new Set<string>();
     for(const record of currentRecords){
@@ -98,7 +105,11 @@ export function weeklyAcademicTrends(
       if(record.status==="excused")excused++;
       if(record.status==="present"||record.status==="late")present++;
     }
-    const possible=weekSessionIds.size*studentIds.size-excused;
+    const eligiblePairs=weekSessions.reduce((count,session)=>{
+      const started=Date.parse(session.starts_at);
+      return count+enrollments.filter((item)=>Date.parse(item.enrolled_at)<=started).length;
+    },0);
+    const possible=eligiblePairs-excused;
     const attendance=possible>0?Math.round(present/possible*100):null;
     const scores=[...best.values()].filter((item)=>item.releasedAt>=weekStart&&item.releasedAt<next)
       .map((item)=>item.score);
