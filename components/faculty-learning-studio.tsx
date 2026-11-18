@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, ClipboardCheck, FileUp, Megaphone, Plus, RadioTower, Trash2, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, ClipboardCheck, FileUp, Megaphone, Plus, RadioTower, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { QuizAuthoringForm } from "@/components/quiz-authoring-form";
@@ -70,6 +70,27 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
     } finally {
       setBusy(false);
     }
+  }
+
+  function moveChapter(index: number, direction: -1 | 1) {
+    setChapters((current) => {
+      const to = index + direction;
+      if (to < 0 || to >= current.length) return current;
+      const next = current.slice();
+      [next[index], next[to]] = [next[to], next[index]];
+      return next;
+    });
+  }
+
+  function moveLecture(chapterId: string, index: number, direction: -1 | 1) {
+    setChapters((current) => current.map((chapter) => {
+      if (chapter.id !== chapterId) return chapter;
+      const to = index + direction;
+      if (to < 0 || to >= chapter.lessons.length) return chapter;
+      const lessons = chapter.lessons.slice();
+      [lessons[index], lessons[to]] = [lessons[to], lessons[index]];
+      return { ...chapter, lessons };
+    }));
   }
 
   async function saveCourse(event: React.FormEvent) {
@@ -277,7 +298,11 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
                 <section key={chapter.id} className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-xs font-semibold"><span className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--surface)] text-[var(--green-strong)]">{chapterIndex + 1}</span>Chapter {chapterIndex + 1}</div>
-                    {chapters.length > 1 ? <button type="button" className="btn-secondary !px-2.5 !py-2 text-[10px]" onClick={() => setChapters((current) => current.filter((item) => item.id !== chapter.id))}><Trash2 size={13}/>Remove chapter</button> : null}
+                    <div className="flex flex-wrap items-center gap-1">
+                      <button type="button" className="btn-secondary !p-2" disabled={chapterIndex === 0} onClick={() => moveChapter(chapterIndex, -1)} aria-label={"Move chapter " + (chapterIndex + 1) + " up"}><ArrowUp size={14}/></button>
+                      <button type="button" className="btn-secondary !p-2" disabled={chapterIndex === chapters.length - 1} onClick={() => moveChapter(chapterIndex, 1)} aria-label={"Move chapter " + (chapterIndex + 1) + " down"}><ArrowDown size={14}/></button>
+                      {chapters.length > 1 && <button type="button" className="btn-secondary !px-2.5 !py-2 text-[10px]" onClick={() => setChapters((current) => current.filter((item) => item.id !== chapter.id))}><Trash2 size={13}/>Remove</button>}
+                    </div>
                   </div>
                   <label className="block text-xs font-semibold">Chapter title
                     <input className={`${input} mt-2 bg-[var(--surface)]`} required maxLength={180} placeholder="e.g. Fundamentals" value={chapter.title} onChange={(event) => setChapters((current) => current.map((item) => item.id === chapter.id ? { ...item, title: event.target.value } : item))} />
@@ -287,7 +312,11 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
                       <div key={lesson.id} className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4">
                         <div className="mb-3 flex items-center justify-between gap-3">
                           <div className="text-[11px] font-semibold">Lecture {lessonIndex + 1}</div>
-                          {chapter.lessons.length > 1 ? <button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-2)]" aria-label="Remove lecture" onClick={() => setChapters((current) => current.map((item) => item.id === chapter.id ? { ...item, lessons: item.lessons.filter((entry) => entry.id !== lesson.id) } : item))}><Trash2 size={14}/></button> : null}
+                          <div className="flex items-center gap-1">
+                            <button type="button" disabled={lessonIndex === 0} className="btn-secondary !p-2" aria-label={"Move lecture " + (lessonIndex + 1) + " up"} onClick={() => moveLecture(chapter.id, lessonIndex, -1)}><ArrowUp size={14}/></button>
+                            <button type="button" disabled={lessonIndex === chapter.lessons.length - 1} className="btn-secondary !p-2" aria-label={"Move lecture " + (lessonIndex + 1) + " down"} onClick={() => moveLecture(chapter.id, lessonIndex, 1)}><ArrowDown size={14}/></button>
+                            {chapter.lessons.length > 1 && <button type="button" className="btn-secondary !p-2" aria-label="Remove lecture" onClick={() => setChapters((current) => current.map((item) => item.id === chapter.id ? { ...item, lessons: item.lessons.filter((entry) => entry.id !== lesson.id) } : item))}><Trash2 size={14}/></button>}
+                          </div>
                         </div>
                         <label className="block text-xs font-semibold">Lecture title
                           <input className={`${input} mt-2`} required maxLength={180} placeholder="e.g. Introduction to data structures" value={lesson.title} onChange={(event) => setChapters((current) => current.map((item) => item.id === chapter.id ? { ...item, lessons: item.lessons.map((entry) => entry.id === lesson.id ? { ...entry, title: event.target.value } : entry) } : item))} />
