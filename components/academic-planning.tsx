@@ -143,7 +143,7 @@ export function ScheduleManager({ classes, entries, canManage }: { classes: Clas
     }
   }
 
-  return <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
+  return <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
     {canManage ? <form onSubmit={add} className="surface h-fit space-y-4 p-5">
       <div className="flex items-center gap-2 text-sm font-semibold"><CalendarPlus size={16}/>Add class time</div>
       <label className="block text-xs font-semibold">Class<select className="input-base mt-2" required value={form.classId} onChange={(event) => setForm({ ...form, classId: event.target.value })}><option value="">Choose a class</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.display_name || "Class"} · Section {item.section}</option>)}</select></label>
