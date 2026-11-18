@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Send } from "lucide-react";
+import { Clock3, CloudCheck, Send } from "lucide-react";
 
 type QuizOption = string | { label?: string; value?: string };
 
@@ -26,6 +26,68 @@ type Props = {
 export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Props) {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionError, setSessionError] = useState("");
+  const [expiry, setExpiry] = useState<string | null>(null);
+  const [timed, setTimed] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [savedAt, setSavedAt] = useState("");
+  const [saveError, setSaveError] = useState("");
+
+  useEffect(() => {
+    if (!isOpen || attemptsRemaining <= 0 || !questions.length) return;
+    let cancelled = false;
+    setSessionReady(false);
+    async function start() {
+      try {
+        const response = await fetch("/api/quizzes/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "start", quiz_id: quizId }),
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(result?.error ?? "Could not start the quiz.");
+        if (cancelled) return;
+        setAnswers(result.answers ?? {});
+        setExpiry(result.expiresAt);
+        setTimed(Boolean(result.timed));
+        setSessionError("");
+        setSessionReady(true);
+      } catch (error) {
+        if (!cancelled) setSessionError(error instanceof Error ? error.message : "Unable to start the quiz.");
+      }
+    }
+    void start();
+    return () => { cancelled = true; };
+  }, [quizId, isOpen, attemptsRemaining, questions.length]);
+
+  useEffect(() => {
+    if (!expiry) return;
+    const tick = () => setSecondsLeft(Math.max(0, Math.ceil((Date.parse(expiry) - Date.now()) / 1000)));
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [expiry]);
+
+  useEffect(() => {
+    if (!sessionReady || submitting) return;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch("/api/quizzes/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "save", quiz_id: quizId, answers }),
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(result?.error ?? "Autosave failed.");
+        setSavedAt(new Date().toLocaleTimeString());
+        setSaveError("");
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : "Autosave failed. Check connection.");
+      }
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [answers, sessionReady, quizId, submitting]);
   const router = useRouter();
   const answeredCount = questions.filter((question) => {
     const answer = answers[question.id];
@@ -76,6 +138,10 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Pro
     const hasAnswers = Object.values(answers).some((answer) =>
       Array.isArray(answer) ? answer.length > 0 : answer.trim().length > 0,
     );
+    if (!sessionReady || (timed && secondsLeft === 0)) {
+      toast.error("The quiz attempt is not active. Check the timer or try refreshing.");
+      return;
+    }
     if (!hasAnswers) {
       toast.error("Please answer at least one question before submitting.");
       return;
@@ -83,7 +149,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Pro
     setSubmitting(true);
     const db = createClient();
     try {
-      const { error } = await db.rpc("submit_quiz_attempt", {
+      const { error } = await db.rpc("submit_quiz_attempt_v2", {
         _quiz_id: quizId,
         _answers: answers,
       });
@@ -91,6 +157,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Pro
         toast.error(error.message);
       } else {
         toast.success("Quiz submitted successfully!");
+        setSessionReady(false);
         setAnswers({});
         router.refresh();
       }
@@ -103,13 +170,20 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Pro
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" aria-label="Assessment questions">
+      {sessionError && <div role="alert" className="surface border-amber-500 p-4 text-xs">{sessionError}</div>}
+      {saveError && <div role="alert" className="surface border-amber-500 p-4 text-xs">{saveError}</div>}
+      {timed && secondsLeft !== null && <div className={"surface-flat flex items-center gap-3 p-4 text-xs " + (secondsLeft <= 60 ? "text-red-600" : "")}>
+        <Clock3 size={18}/>Time remaining <strong className="ml-auto tabular-nums">{Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}</strong>
+      </div>}
+      {timed && secondsLeft === 0 && <p role="alert" className="text-xs text-red-600">Time expired. Submission is locked by the server. Contact faculty if you need assistance.</p>}
+      {!sessionReady && !sessionError && <p role="status" className="text-xs text-[var(--muted)]">Preparing your secure quiz attempt…</p>}
       <section className="surface-flat p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-xs font-semibold">Your attempt</div>
             <div className="mt-1 text-[10px] text-[var(--muted)]">{answeredCount} of {questions.length} questions answered</div>
           </div>
-          <span className="status-pill">{attemptsRemaining} {attemptsRemaining === 1 ? "attempt" : "attempts"} remaining</span>
+          <div className="flex flex-wrap items-center gap-2"><span className="status-pill">{attemptsRemaining} {attemptsRemaining === 1 ? "attempt" : "attempts"} remaining</span>{savedAt && <span className="status-pill"><CloudCheck size={12}/>Saved {savedAt}</span>}</div>
         </div>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]" role="progressbar" aria-label="Questions answered" aria-valuemin={0} aria-valuemax={questions.length} aria-valuenow={answeredCount}>
           <div className="h-full rounded-full bg-[var(--green-strong)] transition-[width] duration-150" style={{ width: `${progress}%` }} />
@@ -217,7 +291,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen }: Pro
         <span className="text-[11px] text-[var(--muted)]">Review your answers before submitting.</span>
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || !sessionReady || (timed && secondsLeft === 0)}
           className="btn-primary !px-6 !py-3 font-semibold"
         >
           <Send size={15} />
