@@ -79,12 +79,25 @@ export async function POST(request: Request) {
   let selectedPdfUrl: string | null = null;
   let selectedPdfTitle = "";
   if (parsed.data.syllabus_id) {
-    const syllabus = (syllabiResult.data ?? []).find((item) => item.id === parsed.data.syllabus_id);
+    if (!classIds.length) {
+      return NextResponse.json({ error: "This PDF is not available in your active classes." }, { status: 403 });
+    }
+    // Resolve the selected document directly instead of searching the latest
+    // 20 outline previews. Old PDFs remain selectable and RLS still applies.
+    const { data: syllabus, error: selectedError } = await db.from("class_syllabi")
+      .select("id,title,class_id,storage_path,file_size")
+      .eq("id", parsed.data.syllabus_id)
+      .eq("college_id", context.profile.college_id)
+      .in("class_id", classIds)
+      .maybeSingle();
+    if (selectedError) return failedQuery("selected syllabus", selectedError);
     if (!syllabus || !classIds.includes(syllabus.class_id)) {
       return NextResponse.json({ error: "This PDF is not available in your active classes." }, { status: 403 });
     }
     const prefix = context.profile.college_id + "/" + syllabus.class_id + "/";
-    if (!syllabus.storage_path.startsWith(prefix) || Number(syllabus.file_size) > 20 * 1024 * 1024) {
+    if (!syllabus.storage_path.startsWith(prefix)
+        || !syllabus.storage_path.toLowerCase().endsWith(".pdf")
+        || Number(syllabus.file_size) > 20 * 1024 * 1024) {
       return NextResponse.json({ error: "The PDF is missing or its metadata is invalid." }, { status: 409 });
     }
     const { data: signed, error: signError } = await createAdminClient().storage
