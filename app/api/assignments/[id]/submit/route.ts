@@ -32,6 +32,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (previousError) return NextResponse.json({ error: "Could not check your submission history." }, { status: 500 });
   if ((previous?.length ?? 0) > 0 && !assignment.allow_resubmission) return NextResponse.json({ error: "Resubmission is disabled for this assignment." }, { status: 409 });
 
+  // Each object may be attached to one submission only. Prevent reusing an old
+  // submission's storage object during a later version or concurrent request.
+  const paths = parsed.data.files.map((file) => file.storage_path);
+  if (new Set(paths).size !== paths.length) {
+    return NextResponse.json({ error: "Select each attachment only once." }, { status: 400 });
+  }
+  if (paths.length) {
+    const { data: linked, error: linkedError } = await admin.from("submission_attachments")
+      .select("id").eq("college_id", assignment.college_id).in("storage_path", paths).limit(1);
+    if (linkedError) return NextResponse.json({ error: "Could not verify whether these attachments are already submitted." }, { status: 503 });
+    if (linked?.length) return NextResponse.json({ error: "An attachment is already linked to another submission. Upload it again for this version." }, { status: 409 });
+  }
   const storagePrefix = `${assignment.college_id}/${assignment.class_id}/${assignmentId}/${context.userId}/`;
   for (const file of parsed.data.files) {
     if (!file.storage_path.startsWith(storagePrefix) || file.storage_path.includes("..")) {
@@ -72,9 +84,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     })));
     if (filesError) {
       console.error("Assignment submission attachment creation failed", { code: filesError.code, message: filesError.message });
-      await admin.from("assignment_submissions").delete().eq("id", submission.id).eq("student_id", context.userId);
-      await admin.storage.from("student-submissions").remove(parsed.data.files.map((file) => file.storage_path));
-      return NextResponse.json({ error: "Submission attachments could not be recorded." }, { status: 500 });
+      const { error: rollbackError } = await admin.from("assignment_submissions")
+        .delete().eq("id", submission.id).eq("college_id", assignment.college_id).eq("student_id", context.userId);
+      if (rollbackError) console.error("Failed to roll back partial submission", { code: rollbackError.code });
+      // Deliberately preserve uploaded Storage objects: a network race or
+      // legacy duplicate reference must never delete another saved submission's file.
+      return NextResponse.json({
+        error: "Submission attachments could not be recorded. Your uploads were preserved; check your submissions before retrying.",
+        partialSave: Boolean(rollbackError),
+      }, { status: 503 });
     }
   }
 

@@ -79,10 +79,16 @@ export function AssignmentComposer({ profile, classes }: { profile: Profile; cla
 export function StudentSubmissionForm({ profile, assignment, previousCount }: { profile: Profile; assignment: any; previousCount: number }) {
   const router=useRouter();const [answer,setAnswer]=useState("");const [files,setFiles]=useState<File[]>([]);const [saving,setSaving]=useState(false);
   function pick(event:React.ChangeEvent<HTMLInputElement>){const selected=Array.from(event.target.files??[]);const invalid=selected.find(f=>!allowedTypes.has(f.type)||f.size>maxFileSize);if(invalid){toast.error(`${invalid.name} is not supported or exceeds 30 MB.`);event.target.value="";return;}setFiles(selected.slice(0,8));}
-  async function submit(e:React.FormEvent){e.preventDefault();setSaving(true);const supabase=createClient();const uploaded:{file_name:string;storage_path:string;mime_type:string;file_size:number}[]=[];
+  async function submit(e:React.FormEvent){e.preventDefault();setSaving(true);const supabase=createClient();const uploaded:{file_name:string;storage_path:string;mime_type:string;file_size:number}[]=[];let submissionRequestStarted=false;
     try{for(const file of files){const path=`${profile.college_id}/${assignment.class_id}/${assignment.id}/${profile.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;const {error}=await supabase.storage.from("student-submissions").upload(path,file,{upsert:false,contentType:file.type});if(error)throw new Error(`Upload failed for ${file.name}: ${error.message}`);uploaded.push({file_name:file.name,storage_path:path,mime_type:file.type,file_size:file.size});}
+      submissionRequestStarted=true;
       const response=await fetch(`/api/assignments/${assignment.id}/submit`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text_answer:answer,files:uploaded})});const result=await response.json();if(!response.ok)throw new Error(result.error??"Submission failed.");toast.success(result.late?"Submitted and marked late.":"Assignment submitted successfully.");router.refresh();
-    }catch(error){if(uploaded.length)await supabase.storage.from("student-submissions").remove(uploaded.map(f=>f.storage_path));toast.error(error instanceof Error?error.message:"Submission failed.");}
+    }catch(error){
+      // A network/response failure does not prove the server failed to save.
+      // Once POST starts, never delete files the completed submission may reference.
+      if(!submissionRequestStarted&&uploaded.length)await supabase.storage.from("student-submissions").remove(uploaded.map(f=>f.storage_path));
+      toast.error(error instanceof Error?error.message:"Submission status uncertain. Check your latest submission before retrying.");
+    }
     finally{setSaving(false);}}
   return <form onSubmit={submit} className="surface p-5 sm:p-6"><div className="mb-5 flex items-center justify-between"><div><div className="text-sm font-semibold">Your work</div><div className="mt-1 text-[11px] text-[var(--muted)]">{previousCount?`Version ${previousCount+1} · ${previousCount} previous submission(s)`:"This will be your first submission."}</div></div><span className="status-pill green">{assignment.allow_resubmission?"Resubmission enabled":"Single submission"}</span></div><Field label="Written answer"><textarea className="input-base min-h-36 resize-y" value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Write your answer here…"/></Field><div className="mt-5"><Field label="Attachments"><label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface-2)] p-4"><UploadCloud size={18} className="text-[var(--green)]"/><span><span className="block text-xs font-semibold">Choose files</span><span className="mt-1 block text-[10px] text-[var(--muted)]">Up to 8 files, 30 MB each</span></span><input className="hidden" type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.txt" onChange={pick}/></label>{files.length>0&&<div className="mt-3 space-y-2">{files.map(file=><div key={file.name} className="flex items-center gap-2 rounded-xl bg-[var(--surface-2)] px-3 py-2 text-[11px]"><Paperclip size={13} className="text-[var(--green)]"/><span className="min-w-0 flex-1 truncate">{file.name}</span><span className="text-[var(--muted)]">{(file.size/1024/1024).toFixed(1)} MB</span></div>)}</div>}</Field></div><button className="btn-primary mt-6 w-full sm:w-auto" disabled={saving||(!answer.trim()&&!files.length)||Boolean(previousCount&&!assignment.allow_resubmission)}>{saving?"Submitting…":"Submit assignment"}<Send size={14}/></button></form>;
 }
@@ -142,7 +148,19 @@ export function EvaluationTable({ submissions, canEvaluate = true }: { submissio
   const [busy,setBusy]=useState<string>("");
   const [suggesting,setSuggesting]=useState<string>("");
   const [rationales,setRationales]=useState<Record<string,string>>({});
-  async function save(id:string,release:boolean){const current=values[id];if(!current||current.marks===""){toast.error("Enter marks before saving.");return;}setBusy(id);const response=await fetch(`/api/submissions/${id}/evaluate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({marks:Number(current.marks),feedback:current.feedback,release})});const result=await response.json();if(!response.ok)toast.error(result.error??"Could not save evaluation.");else{toast.success(release?"Evaluation released to student.":"Evaluation saved privately.");router.refresh();}setBusy("");}
+  async function save(id:string,release:boolean){
+    const current=values[id];if(!current||current.marks===""){toast.error("Enter marks before saving.");return;}
+    setBusy(id);
+    try {
+      const response=await fetch(`/api/submissions/${id}/evaluate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({marks:Number(current.marks),feedback:current.feedback,release})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error??"Could not save evaluation.");
+      if(result.warning)toast.warning(result.warning);
+      else toast.success(release?"Evaluation released to student.":result.released?"Evaluation updated; it remains visible to the student.":"Evaluation saved privately.");
+      router.refresh();
+    }catch(error){toast.error(error instanceof Error?error.message:"Could not save evaluation.");}
+    finally{setBusy("");}
+  }
   async function draftWithAI(submissionId:string){
     setSuggesting(submissionId);
     try{

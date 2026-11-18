@@ -89,8 +89,9 @@ export async function POST(request: Request) {
   if (existing && existing.status === "active") return NextResponse.json({ error: "This account is already active in a college workspace." }, { status: 409 });
 
   // Claim an invitation at most once, before changing the user's membership.
+  const claimedAt = new Date().toISOString();
   const { data: claimed, error: claimError } = await admin.from("college_invitations")
-    .update({ accepted_at: new Date().toISOString() })
+    .update({ accepted_at: claimedAt })
     .eq("id", invitation.id).is("accepted_at", null)
     .gt("expires_at", new Date().toISOString())
     .select("id").maybeSingle();
@@ -104,7 +105,21 @@ export async function POST(request: Request) {
     email: resolvedEmail.toLowerCase(),
     status: "active",
   }, { onConflict: "id" });
-  if (profileError) return NextResponse.json({ error: "The invitation was claimed but profile activation failed. Contact your college administrator to reissue it." }, { status: 500 });
+  if (profileError) {
+    console.error("Invitation profile activation failed", { code: profileError.code });
+    // A failed profile write must not permanently consume the invitation.
+    // The timestamp comparison ensures we can only undo OUR successful claim.
+    const { error: releaseError } = await admin.from("college_invitations")
+      .update({ accepted_at: null })
+      .eq("id", invitation.id).eq("accepted_at", claimedAt);
+    if (releaseError) console.error("Invitation claim recovery failed", { code: releaseError.code });
+    return NextResponse.json({
+      error: releaseError
+        ? "Profile activation failed and the invitation could not be restored. Contact your college administrator."
+        : "Profile activation failed. The invitation is available for another attempt.",
+      retryable: !releaseError,
+    }, { status: 503 });
+  }
   await admin.from("activity_logs").insert({ college_id: invitation.college_id, actor_id: activeUserId, action: "invitation.accepted", entity_type: "profile", entity_id: activeUserId, details: { role: invitation.role } });
   return NextResponse.json({ success: true, redirectTo: "/dashboard" });
 }

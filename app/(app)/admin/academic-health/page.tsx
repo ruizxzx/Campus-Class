@@ -40,6 +40,7 @@ const migrations=[
   ["036","202611190036_syllabus_pgvector_index.sql"],
   ["037","202611190037_academic_service_read_grants.sql"],
   ["038","202611190038_notifications_and_stream_service_grants.sql"],
+  ["039","202611190039_enrollment_and_submission_integrity.sql"],
 ];
 export default async function AcademicHealthPage(){
   await requireRole(["admin"]);
