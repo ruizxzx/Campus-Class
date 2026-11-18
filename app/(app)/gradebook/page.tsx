@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
 import { GradebookGrid } from "@/components/gradebook-grid";
 import { bestReleasedQuizScores, collectEvidence, releasedAssignmentMarks } from "@/lib/academic-evidence";
+import type { GradeWeights } from "@/lib/gradebook-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   const membership = profile.role === "admin"
     ? null
     : profile.role === "faculty"
-      ? await db.from("class_faculty").select("class_id").eq("college_id", collegeId).eq("faculty_id", profile.id)
+      ? await db.from("class_faculty").select("class_id,can_manage_assignments").eq("college_id", collegeId).eq("faculty_id", profile.id)
       : await db.from("class_enrollments").select("class_id").eq("college_id", collegeId).eq("student_id", profile.id).eq("status", "active");
   if (membership?.error) throw new Error("Unable to verify class membership.");
   const permittedIds = membership?.data?.map((row) => row.class_id) ?? [];
@@ -69,6 +70,25 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
       || (quizResult.data?.length ?? 0)>=100 || (sessionsResult.data?.length ?? 0)>=500) {
     throw new Error("Gradebook dataset incomplete: check database permissions or pagination limits.");
   }
+  // Explicit per-class grading policy is optional. Without it we display
+  // descriptive recorded-score averages, never invent an official weighting.
+  const { data: policyRow, error: policyError } = await db.from("class_gradebook_policies")
+    .select("assignment_weight,project_weight,quiz_weight,attendance_weight")
+    .eq("college_id", collegeId).eq("class_id", classId).maybeSingle();
+  const missingPolicyTable = policyError?.code === "PGRST205"
+    || policyError?.code === "42P01" || policyError?.code === "PGRST116";
+  if (policyError && !missingPolicyTable) {
+    throw new Error("Could not load class grading policy; verify database permissions.");
+  }
+  const gradeWeights: GradeWeights | null = policyRow ? {
+    assignment_weight: Number(policyRow.assignment_weight),
+    project_weight: Number(policyRow.project_weight),
+    quiz_weight: Number(policyRow.quiz_weight),
+    attendance_weight: Number(policyRow.attendance_weight),
+  } : null;
+  const canEditPolicy = profile.role === "admin" || (profile.role === "faculty"
+    && (membership?.data ?? []).some((item) => item.class_id === classId
+      && "can_manage_assignments" in item && item.can_manage_assignments === true));
   const submissions=submissionResult.data;
   const submissionIds=submissions.map((item)=>item.id);
   const evaluationResult=await collectEvidence<{ id:string; submission_id:string; marks:number; released_at:string|null }>(
@@ -100,6 +120,8 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   });
   return <>
     <PageHeader title="Academic gradebook" description="One place for assignment marks, quiz results and attendance. Students only see released grades."/>
-    <GradebookGrid classes={classes} classId={selected.id} columns={columns} rows={people} staff={profile.role !== "student"}/>
+    <GradebookGrid classes={classes} classId={selected.id} columns={columns} rows={people}
+      staff={profile.role !== "student"} weights={gradeWeights}
+      policyAvailable={!missingPolicyTable} canEditPolicy={canEditPolicy}/>
   </>;
 }

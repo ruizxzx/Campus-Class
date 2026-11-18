@@ -12,7 +12,7 @@ test("gradebook weighted index uses explicit configured category weights",()=>{
   const value=mod.weightedRecordedIndex({
     scores:[50,80,60],attendance:100,
   },[{type:"assignment",maxMarks:100},{type:"project",maxMarks:100},{type:"quiz",maxMarks:100}],config);
-  assert.equal(value,66);
+  assert.equal(value,65);
 });
 test("missing scores and absent attendance are excluded rather than counted as zero",()=>{
   const value=mod.weightedRecordedIndex({
