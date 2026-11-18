@@ -133,3 +133,20 @@ college AI provider only for that request. The default is **do not share**.
 The API checks both college and user ownership and returns HTTP 403 for an
 unavailable note; it never reads another student's note for context. Notes
 are treated as untrusted reference data and can be cited as a personal source.
+
+## Academic reporting failure (all three pages): new safe diagnostics
+
+For `/success`, `/gradebook` and `/outcomes`, expected database
+errors and incomplete evidence now render a readable, non-destructive status
+instead of an uncaught server-component exception. Administrators can open
+`/admin/academic-health` to check service-role connectivity, required
+objects and key columns without exposing private student records.
+This screen cannot repair a database with absent migrations: apply the missing
+forward SQL patches in filename order, verify Supabase Data API exposure, then
+reload. The service-role client needs `SUPABASE_SERVICE_ROLE_KEY` and
+`NEXT_PUBLIC_SUPABASE_URL` set in Vercel's server environment.
+
+**Why a passing Next.js build did not detect it:** the CI build uses placeholder
+Supabase connection settings and does not execute these authenticated queries
+against the owner's Campus Class database. A DB-level error code is now logged
+server-side for diagnosis. Do not substitute an empty grade for a query failure.
