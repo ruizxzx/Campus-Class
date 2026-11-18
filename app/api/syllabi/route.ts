@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requestProfile, isResponse } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { syllabusUploadSchema } from "@/lib/validators";
+import { hasExpectedFileSignature } from "@/lib/upload-validation";
 
 export const runtime = "nodejs";
 
@@ -28,11 +29,19 @@ export async function POST(request: Request) {
     if (!/^[0-9a-f-]{36}$/i.test(classId)) {
       return NextResponse.json({ error: "Choose a valid class." }, { status: 400 });
     }
-    if (file.type !== "application/pdf") {
+    const safeFileName = file.name.toLowerCase();
+    if (!safeFileName.endsWith(".pdf") && file.type !== "application/pdf") {
       return NextResponse.json({ error: "The syllabus must be a PDF file." }, { status: 400 });
+    }
+    if (file.type && file.type !== "application/pdf" && file.type !== "application/x-pdf") {
+      return NextResponse.json({ error: "The selected file is not recognized as a PDF." }, { status: 400 });
     }
     if (file.size < 1 || file.size > 20 * 1024 * 1024) {
       return NextResponse.json({ error: "The syllabus must be between 1 byte and 20 MB." }, { status: 400 });
+    }
+    const bytes = Buffer.from(await file.arrayBuffer());
+    if (!hasExpectedFileSignature(bytes, ".pdf")) {
+      return NextResponse.json({ error: "The selected file is not a valid PDF document." }, { status: 400 });
     }
 
     const admin = createAdminClient();
@@ -46,7 +55,7 @@ export async function POST(request: Request) {
     }
     if (context.profile.role === "faculty") {
       const { data: permission } = await admin.from("class_faculty")
-        .select("can_manage_assignments")
+        .select("faculty_id")
         .eq("college_id", context.profile.college_id)
         .eq("class_id", classId)
         .eq("faculty_id", context.userId)
@@ -59,13 +68,16 @@ export async function POST(request: Request) {
     const id = crypto.randomUUID();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 180);
     const storagePath = `${context.profile.college_id}/${classId}/${id}-${safeName}`;
-    const { error: uploadError } = await admin.storage.from("class-syllabi").upload(storagePath, await file.arrayBuffer(), {
+    const { error: uploadError } = await admin.storage.from("class-syllabi").upload(storagePath, bytes, {
       contentType: "application/pdf",
       upsert: false,
     });
     if (uploadError) {
-      console.error("Syllabus upload failed", { code: uploadError.message });
-      return NextResponse.json({ error: "Could not upload the syllabus file." }, { status: 500 });
+      console.error("Syllabus upload failed", { code: uploadError.status, message: uploadError.message });
+      if (/bucket/i.test(uploadError.message) || uploadError.status === 404) {
+        return NextResponse.json({ error: "The syllabus Storage bucket is missing. Apply the latest Supabase migrations." }, { status: 503 });
+      }
+      return NextResponse.json({ error: "Could not upload the syllabus file.", code: uploadError.status ?? null }, { status: 500 });
     }
     const { error: insertError } = await admin.from("class_syllabi").insert({
       id,
@@ -80,8 +92,11 @@ export async function POST(request: Request) {
     });
     if (insertError) {
       await admin.storage.from("class-syllabi").remove([storagePath]);
-      console.error("Syllabus metadata insert failed", { code: insertError.code });
-      return NextResponse.json({ error: "Could not save the syllabus." }, { status: 500 });
+      console.error("Syllabus metadata insert failed", { code: insertError.code, message: insertError.message });
+      if (insertError.code === "42P01") {
+        return NextResponse.json({ error: "The syllabus table is missing. Apply the latest Supabase migrations." }, { status: 503 });
+      }
+      return NextResponse.json({ error: "Could not save the syllabus.", code: insertError.code }, { status: 500 });
     }
     await admin.from("activity_logs").insert({
       college_id: context.profile.college_id,
@@ -119,7 +134,7 @@ export async function DELETE(request: Request) {
   if (!syllabus) return NextResponse.json({ error: "Syllabus not found." }, { status: 404 });
   if (context.profile.role === "faculty") {
     const { data: permission } = await admin.from("class_faculty")
-      .select("can_manage_assignments")
+      .select("faculty_id")
       .eq("college_id", context.profile.college_id)
       .eq("class_id", syllabus.class_id)
       .eq("faculty_id", context.userId)
