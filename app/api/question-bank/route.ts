@@ -46,6 +46,10 @@ export async function GET(request:Request){
   if(isResponse(context))return context;
   const url=new URL(request.url);
   const subjectId=url.searchParams.get("subject_id");
+  const offsetRaw=url.searchParams.get("offset")??"0";
+  if(!/^\d{1,6}$/.test(offsetRaw) || Number(offsetRaw)>50000)
+    return NextResponse.json({error:"Invalid question bank page."},{status:400});
+  const offset=Number(offsetRaw);
   if(!subjectId||!uuid.safeParse(subjectId).success)
     return NextResponse.json({error:"Choose a valid subject."},{status:400});
   try{
@@ -53,11 +57,15 @@ export async function GET(request:Request){
     if(!allowed.has(subjectId))return NextResponse.json({error:"Subject not assigned."},{status:403});
     const db=createAdminClient();
     const {data,error}=await db.from("question_bank_items")
-      .select("id,subject_id,prompt,question_type,options,answer_key,marks,difficulty,created_at")
+      .select("id,subject_id,prompt,question_type,options,answer_key,marks,difficulty,created_at,created_by")
       .eq("college_id",context.profile.college_id).eq("subject_id",subjectId)
-      .eq("archived",false).order("updated_at",{ascending:false}).limit(100);
+      .eq("archived",false).order("updated_at",{ascending:false}).order("id").range(offset,offset+49);
     if(error)throw Error("Question bank query failed: "+error.code);
-    return NextResponse.json({items:data??[]});
+    return NextResponse.json({
+      items:(data??[]).map(({created_by,...item})=>({...item,
+        can_manage:context.profile.role==="admin"||created_by===context.userId})),
+      has_more:(data??[]).length===50,
+    });
   }catch(error){
     console.error("Question bank load failed",{reason:error instanceof Error?error.message:"unknown"});
     return NextResponse.json({error:"Could not load the question bank. Check SQL migration 033."},{status:503});
