@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
-type ClassItem = { id: string; display_name: string; section: string; subjects?: { id: string; name: string; code: string } | null };
+type ClassItem = { id: string; display_name: string; section: string; subjects?: { id: string; name: string; code: string }[] | null };
 type Subject = { id: string; name: string; code: string };
 
 export function FacultyLearningStudio({ classes, subjects }: { classes: ClassItem[]; subjects: Subject[] }) {
