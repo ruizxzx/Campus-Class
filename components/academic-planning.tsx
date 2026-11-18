@@ -66,16 +66,16 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
     }
   }
 
-  return <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
+  return <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
     {canManage ? <form onSubmit={upload} className="surface h-fit space-y-4 p-5">
       <div className="text-sm font-semibold">Upload class syllabus</div>
       <label className="block text-xs font-semibold">Class<select className="input-base mt-2" required value={classId} onChange={(event) => setClassId(event.target.value)}><option value="">Choose a class</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.display_name || "Class"} · Section {item.section}</option>)}</select></label>
       <label className="block text-xs font-semibold">Syllabus title<input className="input-base mt-2" required minLength={2} maxLength={180} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Course syllabus"/></label>
       <label className="block text-xs font-semibold">Outline text<textarea className="input-base mt-2 min-h-28 resize-y" maxLength={50000} value={outline} onChange={(event) => setOutline(event.target.value)} placeholder="Paste a searchable outline for students and AI study help."/></label>
-      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[var(--line)] p-4 text-xs hover:border-[var(--green)]"><UploadCloud size={17} className="text-[var(--green)]"/><span>{file?.name ?? "Choose PDF · up to 20 MB"}</span><input className="hidden" type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)}/></label>
+      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[var(--line)] p-4 text-xs hover:border-[var(--green)]"><UploadCloud size={17} className="text-[var(--green)]"/><span className="min-w-0 break-all">{file?.name ?? "Choose PDF · up to 20 MB"}</span><input className="hidden" type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)}/></label>
       <button className="btn-primary w-full" disabled={saving || !classId || !title.trim() || !file}>{saving ? "Uploading…" : "Upload syllabus"}<UploadCloud size={14}/></button>
     </form> : null}
-    <section className="surface p-5">
+    <section className="surface min-w-0 p-4 sm:p-5">
       <div className="mb-4 text-sm font-semibold">Published syllabi</div>
       {syllabi.length ? <div className="space-y-3">{syllabi.map((syllabus) => {
         const classroom = classes.find((item) => item.id === syllabus.class_id);
@@ -121,8 +121,8 @@ export function ScheduleManager({ classes, entries, canManage }: { classes: Clas
           notes: form.notes,
         }),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Could not save the timetable entry.");
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error ?? `Timetable could not be saved (HTTP ${response.status}).`);
       toast.success("Timetable entry added.");
       setForm({ classId: "", weekday: "1", startTime: "09:00", endTime: "10:00", location: "", notes: "" });
       router.refresh();
@@ -135,8 +135,8 @@ export function ScheduleManager({ classes, entries, canManage }: { classes: Clas
 
   async function remove(id: string) {
     const response = await fetch("/api/schedules", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
-    const result = await response.json();
-    if (!response.ok) toast.error(result.error ?? "Could not delete the timetable entry.");
+    const result = await response.json().catch(() => null) as { error?: string } | null;
+    if (!response.ok) toast.error(result?.error ?? "Could not delete the timetable entry.");
     else {
       toast.success("Timetable entry removed.");
       router.refresh();
@@ -148,7 +148,7 @@ export function ScheduleManager({ classes, entries, canManage }: { classes: Clas
       <div className="flex items-center gap-2 text-sm font-semibold"><CalendarPlus size={16}/>Add class time</div>
       <label className="block text-xs font-semibold">Class<select className="input-base mt-2" required value={form.classId} onChange={(event) => setForm({ ...form, classId: event.target.value })}><option value="">Choose a class</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.display_name || "Class"} · Section {item.section}</option>)}</select></label>
       <label className="block text-xs font-semibold">Day<select className="input-base mt-2" value={form.weekday} onChange={(event) => setForm({ ...form, weekday: event.target.value })}>{weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block text-xs font-semibold">Starts<input className="input-base mt-2" type="time" required value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })}/></label>
         <label className="block text-xs font-semibold">Ends<input className="input-base mt-2" type="time" required value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })}/></label>
       </div>
@@ -156,14 +156,14 @@ export function ScheduleManager({ classes, entries, canManage }: { classes: Clas
       <label className="block text-xs font-semibold">Notes<textarea className="input-base mt-2 min-h-20 resize-y" maxLength={2000} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })}/></label>
       <button className="btn-primary w-full" disabled={saving || !form.classId}>{saving ? "Saving…" : "Add to timetable"}<CalendarPlus size={14}/></button>
     </form> : null}
-    <section className="surface p-5">
+    <section className="surface min-w-0 p-4 sm:p-5">
       <div className="mb-4 text-sm font-semibold">Weekly timetable</div>
       {entries.length ? <div className="space-y-2">{[...entries].sort((a, b) => a.weekday - b.weekday || a.start_time.localeCompare(b.start_time)).map((entry) => {
         const classroom = classes.find((item) => item.id === entry.class_id);
         return <article key={entry.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--line)] p-4">
           <div className="w-20 text-xs font-semibold">{weekdays[entry.weekday]}</div>
           <div className="w-28 text-xs">{entry.start_time.slice(0, 5)}–{entry.end_time.slice(0, 5)}</div>
-          <div className="min-w-40 flex-1"><div className="text-xs font-semibold">{classroom?.display_name ?? "Class"} · Section {classroom?.section ?? "—"}</div><div className="mt-1 text-[10px] text-[var(--muted)]">{entry.location || "Location not set"}{entry.notes ? ` · ${entry.notes}` : ""}</div></div>
+          <div className="min-w-0 flex-[1_1_160px]"><div className="text-xs font-semibold">{classroom?.display_name ?? "Class"} · Section {classroom?.section ?? "—"}</div><div className="mt-1 text-[10px] text-[var(--muted)]">{entry.location || "Location not set"}{entry.notes ? ` · ${entry.notes}` : ""}</div></div>
           {canManage ? <button type="button" className="btn-secondary !px-3 !py-2 text-[10px]" onClick={() => void remove(entry.id)}><Trash2 size={13}/>Delete</button> : null}
         </article>;
       })}</div> : <p className="text-xs text-[var(--muted)]">No timetable entries yet.</p>}

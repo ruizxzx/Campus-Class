@@ -645,7 +645,7 @@ export function ClassChatRoom({
           shouldFollowRef.current = isNearBottom;
           if (isNearBottom) setShowJumpLatest(false);
         }}
-        className="relative max-h-[min(62vh,720px)] min-h-[330px] overflow-y-auto p-4 sm:p-6"
+        className="relative max-h-[min(62dvh,720px)] min-h-[220px] overflow-y-auto overscroll-y-contain p-3 sm:min-h-[330px] sm:p-6"
       >
         {olderAvailable && !search.trim() && (
           <div className="mb-5 text-center">

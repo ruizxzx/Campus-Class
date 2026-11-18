@@ -49,9 +49,9 @@ export function PWAInstallButton() {
 
   if (installed) return null;
   return (
-    <button type="button" onClick={() => void install()} className="btn-secondary h-9 items-center gap-1.5 !px-2 text-[10px] sm:inline-flex" aria-label="Install CampusClass app">
+    <button type="button" onClick={() => void install()} className="btn-secondary !h-10 !w-10 shrink-0 items-center gap-1.5 !p-2 text-[10px] sm:!w-auto sm:!px-3" aria-label="Install CampusClass app">
       <Download size={14}/>
-      Install app
+      <span className="hidden sm:inline">Install app</span>
     </button>
   );
 }

@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types/database";
 import { BrandMark } from "@/components/ui";
 import { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, Sun, Moon, LogOut, Plus, CalendarDays, ChartNoAxesCombined, School, ChevronDown, Menu, X, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower, PenLine } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 
 const iconMap = { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, CalendarDays, ChartNoAxesCombined, School, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower, PenLine } as const;
@@ -35,8 +35,8 @@ function NavLinks({ navSections, pathname, close }: { navSections: { section: st
       <div className="space-y-1">{section.items.map((item) => {
         const Icon = (iconMap as Record<string, typeof LayoutDashboard>)[item.icon] || Plus;
         const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
-        return <Link key={item.href} href={item.href} onClick={close} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition-colors ${active ? "bg-[var(--green-soft)] text-[var(--green-strong)]" : "text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"}`}>
-          <Icon size={16} strokeWidth={active ? 2.3 : 1.8}/><span>{item.label}</span>{active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--green)]"/>}
+        return <Link key={item.href} href={item.href} onClick={close} aria-current={active ? "page" : undefined} className={`flex min-h-11 min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition-colors ${active ? "bg-[var(--green-soft)] text-[var(--green-strong)]" : "text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"}`}>
+          <Icon size={16} className="shrink-0" strokeWidth={active ? 2.3 : 1.8}/><span className="min-w-0 flex-1 truncate">{item.label}</span>{active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--green)]"/>}
         </Link>;
       })}</div>
     </div>)}
@@ -54,8 +54,57 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
   const navSections = itemsFor(profile.role);
-  const allItems = navSections.flatMap((s) => s.items);
+  const allItems = navSections.flatMap((section) => section.items);
+
+  function closeMobileNav() {
+    setMobileOpen(false);
+    menuButtonRef.current?.focus();
+  }
+
+  // Lock background scrolling while the mobile drawer is open. Keep keyboard
+  // navigation inside it and close it on Escape or when switching to desktop.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMobileNav();
+      }
+      if (event.key !== "Tab" || !drawerRef.current) return;
+      const focusable = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    const desktop = window.matchMedia("(min-width: 768px)");
+    function handleBreakpointChange() {
+      if (desktop.matches) setMobileOpen(false);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    desktop.addEventListener("change", handleBreakpointChange);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      desktop.removeEventListener("change", handleBreakpointChange);
+    };
+  }, [mobileOpen]);
 
   async function signOut() {
     setSigningOut(true);
@@ -65,30 +114,53 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
     router.refresh();
   }
 
-  return <div className="min-h-screen bg-[var(--bg)]">
-    <aside className="desktop-sidebar fixed inset-y-0 left-0 z-30 flex w-[252px] flex-col border-r border-[var(--line)] bg-[var(--surface)] px-5 py-6">
-      <div className="px-2"><BrandMark/></div>
-      <div className="my-7 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-3">
-        <div className="flex items-center gap-2"><div className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green-strong)]"><School size={15}/></div><div className="min-w-0"><div className="truncate text-[11px] font-semibold">{profile.full_name}</div><div className="mt-0.5 text-[10px] capitalize text-[var(--muted)]">{profile.role} workspace</div></div><ChevronDown size={13} className="ml-auto text-[var(--muted)]"/></div>
+  const appearanceToggle = (
+    <button type="button" className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-[var(--muted)] hover:bg-[var(--surface-2)]" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-[var(--surface-2)]">{mounted && theme === "dark" ? <Sun size={14}/> : <Moon size={14}/>}</span>
+      {mounted && theme === "dark" ? "Light appearance" : "Dark appearance"}
+    </button>
+  );
+
+  const signOutButton = (
+    <button type="button" disabled={signingOut} onClick={signOut} className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-[var(--muted)] hover:bg-[var(--surface-2)] disabled:opacity-60"><LogOut size={15} className="shrink-0"/>{signingOut ? "Signing out…" : "Sign out"}</button>
+  );
+
+  return <div className="min-h-[100dvh] min-w-0 bg-[var(--bg)]">
+    <a href="#main-content" className="sr-only fixed top-2 left-2 z-[70] rounded-lg bg-[var(--surface)] px-3 py-2 text-sm font-semibold focus:not-sr-only">Skip to main content</a>
+    <aside className="desktop-sidebar fixed inset-y-0 left-0 z-30 hidden w-[252px] min-h-0 flex-col overflow-hidden border-r border-[var(--line)] bg-[var(--surface)] px-4 py-5 md:flex lg:px-5 lg:py-6" aria-label="Desktop sidebar">
+      <div className="shrink-0 px-2"><BrandMark/></div>
+      <div className="my-5 shrink-0 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-3 lg:my-7">
+        <div className="flex min-w-0 items-center gap-2"><div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green-strong)]"><School size={15}/></div><div className="min-w-0 flex-1"><div className="truncate text-[11px] font-semibold">{profile.full_name}</div><div className="mt-0.5 text-[10px] capitalize text-[var(--muted)]">{profile.role} workspace</div></div></div>
       </div>
-      <nav className="min-h-0 flex-1 overflow-y-auto pr-1"><NavLinks navSections={navSections} pathname={pathname}/></nav>
-      <div className="mt-5 border-t border-[var(--line)] pt-4">
-        <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--surface-2)]" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><span className="grid h-6 w-6 place-items-center rounded-lg bg-[var(--surface-2)]">{mounted && theme === "dark" ? <Sun size={14}/> : <Moon size={14}/>}</span>{mounted && theme === "dark" ? "Light appearance" : "Dark appearance"}</button>
-        <button disabled={signingOut} onClick={signOut} className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--surface-2)]"><LogOut size={15}/>{signingOut ? "Signing out…" : "Sign out"}</button>
+      <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-1" aria-label="Sidebar navigation"><NavLinks navSections={navSections} pathname={pathname}/></nav>
+      <div className="mt-3 shrink-0 border-t border-[var(--line)] pt-3">
+        {appearanceToggle}
+        {signOutButton}
       </div>
     </aside>
 
-    <header className="fixed top-0 right-0 left-0 z-20 flex h-[66px] items-center justify-between border-b border-[var(--line)] bg-[var(--surface)]/95 px-5 backdrop-blur md:left-[252px] md:px-8">
-      <div className="flex items-center gap-3 md:hidden"><button className="btn-secondary !p-2" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu size={16}/></button><BrandMark/></div>
+    <header className="fixed top-0 right-0 left-0 z-20 flex h-[66px] min-w-0 items-center justify-between gap-2 border-b border-[var(--line)] bg-[var(--surface)]/95 px-3 backdrop-blur sm:px-5 md:left-[252px] md:px-8">
+      <div className="flex min-w-0 items-center gap-2 md:hidden"><button ref={menuButtonRef} type="button" className="btn-secondary !h-10 !w-10 shrink-0 !p-2" onClick={() => setMobileOpen(true)} aria-label="Open navigation" aria-controls="mobile-sidebar" aria-expanded={mobileOpen}><Menu size={19}/></button><div className="min-w-0 scale-90 origin-left sm:scale-100"><BrandMark/></div></div>
       <div className="hidden text-xs font-medium text-[var(--muted)] md:block">Academic workspace <span className="mx-2 text-[var(--line)]">/</span><span className="capitalize text-[var(--text)]">{profile.role}</span></div>
-      <div className="ml-auto flex items-center gap-3"><PWAInstallButton/><Link href="/notifications" className="relative grid h-9 w-9 place-items-center rounded-xl text-[var(--muted)] hover:bg-[var(--surface-2)]"><Bell size={17}/></Link><div className="hidden h-8 w-8 place-items-center rounded-full bg-[var(--green-soft)] text-xs font-bold text-[var(--green-strong)] sm:grid">{profile.full_name.slice(0,1).toUpperCase()}</div><div className="hidden text-right sm:block"><div className="text-[11px] font-semibold">{profile.full_name}</div><div className="text-[10px] capitalize text-[var(--muted)]">{profile.role}</div></div></div>
+      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 sm:gap-3"><PWAInstallButton/><Link href="/notifications" aria-label="Notifications" className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[var(--muted)] hover:bg-[var(--surface-2)]"><Bell size={18}/></Link><div className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--green-soft)] text-xs font-bold text-[var(--green-strong)] sm:grid">{profile.full_name.slice(0,1).toUpperCase()}</div><div className="hidden max-w-36 text-right lg:block"><div className="truncate text-[11px] font-semibold">{profile.full_name}</div><div className="text-[10px] capitalize text-[var(--muted)]">{profile.role}</div></div></div>
     </header>
 
-    {mobileOpen && <div className="fixed inset-0 z-50 bg-black/35 md:hidden" onClick={() => setMobileOpen(false)}><div className="h-full w-[min(320px,86vw)] bg-[var(--surface)] p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}><div className="mb-7 flex items-center justify-between"><BrandMark/><button className="btn-secondary !p-2" onClick={() => setMobileOpen(false)}><X size={15}/></button></div><NavLinks navSections={navSections} pathname={pathname} close={() => setMobileOpen(false)}/><button onClick={signOut} className="mt-8 flex items-center gap-3 text-xs font-semibold text-[var(--muted)]"><LogOut size={15}/>Sign out</button></div></div>}
+    {mobileOpen && <div className="fixed inset-0 z-50 md:hidden">
+      <button type="button" tabIndex={-1} aria-label="Close navigation" className="absolute inset-0 h-full w-full bg-black/45" onClick={closeMobileNav}/>
+      <aside id="mobile-sidebar" ref={drawerRef} role="dialog" aria-modal="true" aria-label="CampusClass navigation" className="absolute inset-y-0 left-0 flex h-full max-h-[100dvh] w-[min(340px,90vw)] min-w-0 flex-col overflow-hidden border-r border-[var(--line)] bg-[var(--surface)] px-4 pt-[max(16px,env(safe-area-inset-top))] shadow-2xl sm:px-5">
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-2 border-b border-[var(--line)] pb-4"><BrandMark/><button ref={closeButtonRef} type="button" className="btn-secondary !h-10 !w-10 shrink-0 !p-2" onClick={closeMobileNav} aria-label="Close navigation"><X size={18}/></button></div>
+        <div className="mb-4 shrink-0 rounded-xl bg-[var(--surface-2)] px-3 py-2"><div className="truncate text-xs font-semibold">{profile.full_name}</div><div className="mt-1 text-[10px] capitalize text-[var(--muted)]">{profile.role} workspace</div></div>
+        <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-4 pr-1 touch-pan-y" aria-label="Mobile sidebar navigation"><NavLinks navSections={navSections} pathname={pathname} close={closeMobileNav}/></nav>
+        <div className="shrink-0 border-t border-[var(--line)] bg-[var(--surface)] pt-2 pb-[max(12px,env(safe-area-inset-bottom))]">
+          {appearanceToggle}
+          {signOutButton}
+        </div>
+      </aside>
+    </div>}
 
-    <main className="app-content min-h-screen overflow-x-hidden pt-[66px] md:pl-[252px]"><div className="mx-auto w-full max-w-[1500px] px-5 py-8 md:px-8 md:py-10">{children}</div></main>
-    <nav className="mobile-nav fixed right-0 bottom-0 left-0 z-30 justify-around border-t border-[var(--line)] bg-[var(--surface)]/95 px-2 py-2 pb-[max(env(safe-area-inset-bottom),8px)] backdrop-blur md:hidden">
-      {allItems.slice(0,5).map((item) => { const Icon = (iconMap as Record<string, typeof LayoutDashboard>)[item.icon] || Plus; const active = pathname === item.href || pathname.startsWith(`${item.href}/`); return <Link key={item.href} href={item.href} className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-[9px] font-semibold ${active ? "text-[var(--green-strong)]" : "text-[var(--muted)]"}`}><Icon size={18}/><span className="max-w-[64px] truncate">{item.label}</span></Link>; })}
+    <main id="main-content" className="app-content min-h-[100dvh] min-w-0 overflow-x-hidden pt-[66px] md:pl-[252px]"><div className="app-page-container mx-auto w-full min-w-0 max-w-[1500px] px-3 py-5 sm:px-5 sm:py-8 md:px-8 md:py-10">{children}</div></main>
+    <nav className="mobile-nav fixed right-0 bottom-0 left-0 z-30 items-stretch justify-around border-t border-[var(--line)] bg-[var(--surface)]/95 px-1 pt-2 pb-[max(8px,env(safe-area-inset-bottom))] backdrop-blur md:hidden" aria-label="Quick navigation">
+      {allItems.slice(0,5).map((item) => { const Icon = (iconMap as Record<string, typeof LayoutDashboard>)[item.icon] || Plus; const active = pathname === item.href || pathname.startsWith(`${item.href}/`); return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[9px] font-semibold ${active ? "text-[var(--green-strong)]" : "text-[var(--muted)]"}`}><Icon size={18} className="shrink-0"/><span className="w-full truncate text-center">{item.label}</span></Link>; })}
     </nav>
   </div>;
 }
