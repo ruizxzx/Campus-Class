@@ -1,25 +1,37 @@
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
+import { AcademicDataState } from "@/components/academic-data-state";
+import { academicIssueFor, academicLog, missingOptionalAcademicTable } from "@/lib/academic-health";
 import { OutcomeDashboard } from "@/components/outcome-dashboard";
 import { bestReleasedQuizScores, collectEvidence, releasedAssignmentMarks } from "@/lib/academic-evidence";
 
 export const dynamic = "force-dynamic";
 export default async function OutcomesPage({ searchParams }: { searchParams: Promise<{ class_id?: string }> }) {
   const profile = await requireRole(["admin","faculty"]);
-  const db = createAdminClient();
+  let db:ReturnType<typeof createAdminClient>;
+  try{db=createAdminClient();}
+  catch{
+    academicLog("Outcomes.configuration", {code:"SERVER_CONFIG"});
+    return <><PageHeader title="Outcomes" description="Private academic reporting."/>
+      <AcademicDataState module="Outcomes" issue="configuration" admin={profile.role==="admin"}/></>;
+  }
   const collegeId = profile.college_id;
   const relations = profile.role === "faculty"
     ? await db.from("class_faculty").select("class_id").eq("college_id", collegeId).eq("faculty_id", profile.id)
     : { data: null, error: null };
-  if (relations.error) throw new Error("Unable to verify faculty access.");
+  if(relations.error){academicLog("outcomes.membership",relations.error);
+    return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
+      <AcademicDataState module="Outcomes" issue={academicIssueFor(relations.error)} admin={profile.role==="admin"}/></>;}
   const classIds = relations.data?.map((item) => item.class_id) ?? [];
   const query = db.from("classes").select("id,subject_id,display_name,section,subjects(name,code)")
     .eq("college_id", collegeId).eq("is_active", true);
   const { data: rawClasses, error: classesError } = profile.role === "admin"
     ? await query.limit(200)
     : classIds.length ? await query.in("id", classIds).limit(200) : { data: [], error: null };
-  if (classesError) throw new Error("Could not load outcomes classes.");
+  if(classesError){academicLog("outcomes.classes",classesError);
+    return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
+      <AcademicDataState module="Outcomes" issue={academicIssueFor(classesError)} admin={profile.role==="admin"}/></>;}
   const classes = (rawClasses ?? []).map((item) => {
     const subject = Array.isArray(item.subjects) ? item.subjects[0] : item.subjects;
     return { id:item.id, subjectId:item.subject_id, name:(subject?.code ?? subject?.name ?? "Class") + " · " + item.section };
@@ -34,13 +46,18 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
     db.from("quizzes").select("id,title,max_marks").eq("college_id",collegeId).eq("class_id",selected.id).eq("status","published").limit(100),
   ]);
   if (outcomeResponse.error || assignmentResponse.error || quizResponse.error) {
-    throw new Error("Unable to load course-outcome data. Check migration 202611180026.");
+    const error=outcomeResponse.error||assignmentResponse.error||quizResponse.error;
+    academicLog("outcomes.initial",error);
+    return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
+      <AcademicDataState module="Outcomes" issue={academicIssueFor(error)} admin={profile.role==="admin"}/></>;
   }
   const outcomeIds = (outcomeResponse.data ?? []).map((item) => item.id);
   const { data: allMappings, error: mappingsError } = outcomeIds.length
     ? await db.from("outcome_assessments").select("id,outcome_id,assignment_id,quiz_id,weight").eq("college_id",collegeId).in("outcome_id",outcomeIds).limit(300)
     : { data: [], error: null };
-  if (mappingsError) throw new Error("Unable to load outcome mappings.");
+  if(mappingsError){academicLog("outcomes.mappings",mappingsError);
+    return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
+      <AcademicDataState module="Outcomes" issue={academicIssueFor(mappingsError)} admin={profile.role==="admin"}/></>;}
 
   const assignmentIds = (assignmentResponse.data ?? []).map((item) => item.id);
   const quizIds = (quizResponse.data ?? []).map((item) => item.id);
@@ -57,14 +74,21 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
   if(subsResult.error||quizScoresResult.error||subsResult.truncated||quizScoresResult.truncated
      ||(outcomeResponse.data?.length??0)>=100||(assignmentResponse.data?.length??0)>=100
      ||(quizResponse.data?.length??0)>=100||(allMappings?.length??0)>=300)
-    throw new Error("Outcome evidence was incomplete. Increase pagination before interpreting scores.");
+    const error=subsResult.error||quizScoresResult.error;
+    academicLog("outcomes.evidence",error??{code:"INCOMPLETE"});
+    return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
+      <AcademicDataState module="Outcomes" issue={error?academicIssueFor(error):"incomplete"} admin={profile.role==="admin"}/></>;
 
   const submissionIds=subsResult.data.map((row)=>row.id);
   const evaluationResult=await collectEvidence<{id:string;submission_id:string;marks:number;released_at:string|null}>(
     submissionIds,async(batch,from,to)=>db.from("assignment_evaluations")
       .select("id,submission_id,marks,released_at").eq("college_id",collegeId)
       .in("submission_id",batch).not("released_at","is",null).order("id").range(from,to));
-  if(evaluationResult.error||evaluationResult.truncated) throw new Error("Outcome evaluations were incomplete.");
+  if(evaluationResult.error||evaluationResult.truncated){
+    academicLog("outcomes.evaluations",evaluationResult.error??{code:"INCOMPLETE"});
+    return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
+      <AcademicDataState module="Outcomes" issue={evaluationResult.error?academicIssueFor(evaluationResult.error):"incomplete"} admin={profile.role==="admin"}/></>;
+  }
 
   const assignmentScores=releasedAssignmentMarks(subsResult.data,evaluationResult.data);
   const quizScores=bestReleasedQuizScores(quizScoresResult.data);

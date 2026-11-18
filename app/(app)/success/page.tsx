@@ -2,6 +2,8 @@ import { nowEpochMs } from "@/lib/time";
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui";
+import { AcademicDataState } from "@/components/academic-data-state";
+import { academicIssueFor, academicLog, missingOptionalAcademicTable } from "@/lib/academic-health";
 import { StudentSuccessDashboard } from "@/components/student-success-dashboard";
 import { summarizeStudent, releasedQuizEvidence, DEFAULT_SUPPORT_RULES, validSupportRules, type SupportRules } from "@/lib/student-success";
 import { collectEvidence } from "@/lib/academic-evidence";
@@ -11,19 +13,29 @@ export const dynamic = "force-dynamic";
 
 export default async function SuccessPage({ searchParams }: { searchParams: Promise<{ class_id?: string }> }) {
   const profile = await requireRole(["admin", "faculty"]);
-  const db = createAdminClient();
+  let db:ReturnType<typeof createAdminClient>;
+  try{db=createAdminClient();}
+  catch{
+    academicLog("Student Success.configuration", {code:"SERVER_CONFIG"});
+    return <><PageHeader title="Student Success" description="Private academic reporting."/>
+      <AcademicDataState module="Student Success" issue="configuration" admin={profile.role==="admin"}/></>;
+  }
   const collegeId = profile.college_id;
   const classRelations = profile.role === "faculty"
     ? await db.from("class_faculty").select("class_id").eq("college_id", collegeId).eq("faculty_id", profile.id)
     : { data: null, error: null };
-  if (classRelations.error) throw new Error("Cannot verify faculty assignments.");
+  if(classRelations.error){academicLog("success.membership",classRelations.error);
+    return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
+      <AcademicDataState module="Student Success" issue={academicIssueFor(classRelations.error)} admin={profile.role==="admin"}/></>;}
   const ids = classRelations.data?.map((item) => item.class_id) ?? [];
   const classQuery = db.from("classes").select("id,display_name,section,subjects(name,code)")
     .eq("college_id", collegeId).eq("is_active", true).order("display_name");
   const { data: classrooms, error: classesError } = profile.role === "admin"
     ? await classQuery.limit(200)
     : ids.length ? await classQuery.in("id", ids).limit(200) : { data: [], error: null };
-  if (classesError) throw new Error("Cannot load assigned classes.");
+  if(classesError){academicLog("success.classes",classesError);
+    return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
+      <AcademicDataState module="Student Success" issue={academicIssueFor(classesError)} admin={profile.role==="admin"}/></>;}
   const classOptions = (classrooms ?? []).map((item) => {
     const subject = Array.isArray(item.subjects) ? item.subjects[0] : item.subjects;
     return { id: item.id, name: (subject?.name ?? item.display_name ?? "Class") + " · " + item.section };
@@ -63,15 +75,18 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     || (quizResult.data?.length ?? 0) >= 1000
     || (sessionsResult.data?.length ?? 0) >= 1000
     || (recordsResult.data?.length ?? 0) >= 5000) {
-    console.error("Student success dataset failed", errors.map((result) => result.error?.code));
-    return <><PageHeader title="Student Success Intelligence" description="Explainable early support signals, never automated academic penalties."/>
-      <div role="alert" className="surface border-amber-500 p-5 text-sm">Could not load a complete academic evidence set. Verify the SQL migrations and query limits before interpreting support signals.</div></>;
+    const error=errors.find((item)=>item.error)?.error;
+    academicLog("success.evidence",error??{code:"INCOMPLETE"});
+    return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
+      <AcademicDataState module="Student Success" issue={error?academicIssueFor(error):"incomplete"} admin={profile.role==="admin"}/></>;
   }
   const studentIds = (rosterResult.data ?? []).map((item) => item.student_id);
   const { data: profiles, error: profileError } = studentIds.length
     ? await db.from("profiles").select("id,full_name,email").eq("college_id", collegeId).in("id", studentIds).limit(1000)
     : { data: [], error: null };
-  if (profileError) throw new Error("Unable to load class roster.");
+  if(profileError){academicLog("success.roster",profileError);
+    return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
+      <AcademicDataState module="Student Success" issue={academicIssueFor(profileError)} admin={profile.role==="admin"}/></>;}
   const names = new Map((profiles ?? []).map((item) => [item.id, { name: item.full_name, email: item.email }]));
   const assignmentIds = new Set((assignmentsResult.data ?? []).map((item) => item.id));
   const quizMap = new Map((quizResult.data ?? []).map((quiz) => [quiz.id, Number(quiz.max_marks)]));
@@ -84,10 +99,11 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   const { data: savedRules, error: rulesError } = await db.from("student_success_rules")
     .select("attendance_min_percent,overdue_assignment_count,quiz_min_percent,min_attendance_sessions,min_assigned_work,min_released_quizzes")
     .eq("college_id",collegeId).maybeSingle();
-  const missingRulesTable=rulesError?.code==="PGRST205"
-    || rulesError?.code==="42P01" || rulesError?.code==="PGRST116";
+  const missingRulesTable=missingOptionalAcademicTable(rulesError);
   if(rulesError&&!missingRulesTable)
-    throw new Error("Unable to load Student Success support thresholds.");
+    academicLog("success.rules",rulesError);
+    return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
+      <AcademicDataState module="Student Success" issue={academicIssueFor(rulesError)} admin={profile.role==="admin"}/></>;
   const rules:SupportRules=savedRules?{
     attendance_min_percent:Number(savedRules.attendance_min_percent),
     overdue_assignment_count:Number(savedRules.overdue_assignment_count),
@@ -96,7 +112,11 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     min_assigned_work:Number(savedRules.min_assigned_work),
     min_released_quizzes:Number(savedRules.min_released_quizzes),
   }:DEFAULT_SUPPORT_RULES;
-  if(!validSupportRules(rules))throw new Error("Invalid college support thresholds.");
+  if(!validSupportRules(rules)){
+    academicLog("success.rules", {code:"INVALID_RULES"});
+    return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
+      <AcademicDataState module="Student Success" issue="unavailable" admin={profile.role==="admin"}/></>;
+  }
 
   const now = nowEpochMs();
 
