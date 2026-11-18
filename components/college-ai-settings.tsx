@@ -63,7 +63,7 @@ export function CollegeAISettings() {
         }),
       });
       const raw = await response.text();
-      let result: { enabled?: boolean; model?: string; configured?: boolean; error?: string } = {};
+      let result: { enabled?: boolean; model?: string; configured?: boolean; needs_rekey?: boolean; error?: string } = {};
       if (raw) {
         try {
           result = JSON.parse(raw) as typeof result;
