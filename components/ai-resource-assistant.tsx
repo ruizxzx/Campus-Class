@@ -77,7 +77,7 @@ export function AIResourceAssistant({
         {compact ? <Sparkles size={13}/> : <span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green-strong)]"><BrainCircuit size={16}/></span>}
         <span className={compact ? "" : "min-w-0 flex-1"}>
           {!compact ? <span className="block text-xs font-semibold">Ask AI about this resource</span> : "Ask AI"}
-          {!compact ? <span className="mt-1 block text-[10px] text-[var(--muted)]">Questions are grounded in the text on this page.</span> : null}
+          {!compact ? <span className="mt-1 block text-[10px] text-[var(--muted)]">Answers use resource text; syllabus questions can also read the private PDF.</span> : null}
         </span>
         {!compact ? (open ? <ChevronUp size={15}/> : <ChevronDown size={15}/>) : null}
       </button>
@@ -87,7 +87,7 @@ export function AIResourceAssistant({
             <div className="flex max-h-[min(72vh,620px)] w-full max-w-lg flex-col overflow-hidden rounded-[20px] border border-[var(--line)] bg-[var(--surface)] shadow-2xl">
               <header className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green-strong)]"><BrainCircuit size={16}/></span>
-                <div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">Ask AI about this resource</div><div className="mt-0.5 text-[9px] text-[var(--muted)]">Grounded in the current page text</div></div>
+                <div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">Ask AI about this resource</div><div className="mt-0.5 text-[9px] text-[var(--muted)]">Grounded in accessible course material</div></div>
                 <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[var(--muted)] hover:bg-[var(--surface-2)]" onClick={() => setOpen(false)} aria-label="Close Ask AI"><X size={16}/></button>
               </header>
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -113,7 +113,7 @@ export function AIResourceAssistant({
                   />
                   <button type="submit" className="btn-primary !h-10 !w-10 !shrink-0 !p-0" disabled={loading || !question.trim()} aria-label="Send question"><ArrowUp size={16}/></button>
                 </div>
-                <p className="mt-2 text-[9px] leading-4 text-[var(--muted)]">AI answers can make mistakes. The response is based only on this resource.</p>
+                <p className="mt-2 text-[9px] leading-4 text-[var(--muted)]">AI answers can make mistakes. For syllabi, the attached PDF is also sent to the configured provider.</p>
               </form>
             </div>
           </div>
