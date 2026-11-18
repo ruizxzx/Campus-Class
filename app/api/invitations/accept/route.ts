@@ -14,7 +14,8 @@ async function findInvitation(admin: ReturnType<typeof createAdminClient>, token
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const { data, error } = await admin.from("college_invitations").select("*").eq("token_hash", tokenHash).maybeSingle();
     if (error) throw error;
-    if (data) return data;
+    // An invalid token must never fall back to searching for an invitation by email.
+    return data;
   }
 
   if (!normalizedEmail) return null;
@@ -32,12 +33,15 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
   const targetedEmail = parsed.data.email?.trim().toLowerCase();
-  const invitation = await findInvitation(admin, parsed.data.token, targetedEmail);
+  const sessionClient = await createClient();
+  const { data: { user } } = await sessionClient.auth.getUser();
+  if (!parsed.data.token && !user?.email) {
+    return NextResponse.json({ error: "Sign in to the invited email or use a secure invitation link." }, { status: 401 });
+  }
+  const invitation = await findInvitation(admin, parsed.data.token, user?.email?.trim().toLowerCase() ?? targetedEmail);
   if (!invitation) return NextResponse.json({ error: "This invitation is invalid or has expired." }, { status: 404 });
   if (invitation.accepted_at || new Date(invitation.expires_at).getTime() <= Date.now()) return NextResponse.json({ error: "This invitation is no longer active." }, { status: 410 });
 
-  const sessionClient = await createClient();
-  const { data: { user } } = await sessionClient.auth.getUser();
   const signedInEmail = user?.email?.trim().toLowerCase();
 
   if (signedInEmail && signedInEmail !== invitation.email.trim().toLowerCase()) {
@@ -58,11 +62,16 @@ export async function POST(request: Request) {
 
     if (createError) {
       if (createError.message.toLowerCase().includes("already registered") || createError.message.toLowerCase().includes("already exists")) {
-        const { data: existingAuthUser, error: lookupError } = await admin.auth.admin.listUsers();
-        if (lookupError) throw lookupError;
-        const existingMatch = existingAuthUser.users.find((candidate) => candidate.email?.toLowerCase() === resolvedEmail);
-        if (!existingMatch) throw createError;
-        activeUserId = existingMatch.id;
+        // Existing accounts require successful password authentication; a matching
+        // email from admin.listUsers() is not proof of account ownership.
+        const { data: login, error: loginError } = await sessionClient.auth.signInWithPassword({
+          email: resolvedEmail,
+          password: parsed.data.password,
+        });
+        if (loginError || !login.user || login.user.email?.trim().toLowerCase() !== resolvedEmail) {
+          return NextResponse.json({ error: "Sign in using the invited account's password or reset it first." }, { status: 401 });
+        }
+        activeUserId = login.user.id;
       } else {
         throw createError;
       }
@@ -79,6 +88,14 @@ export async function POST(request: Request) {
   if (existing && existing.college_id !== invitation.college_id) return NextResponse.json({ error: "This account is already linked to another college workspace." }, { status: 409 });
   if (existing && existing.status === "active") return NextResponse.json({ error: "This account is already active in a college workspace." }, { status: 409 });
 
+  // Claim an invitation at most once, before changing the user's membership.
+  const { data: claimed, error: claimError } = await admin.from("college_invitations")
+    .update({ accepted_at: new Date().toISOString() })
+    .eq("id", invitation.id).is("accepted_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .select("id").maybeSingle();
+  if (claimError || !claimed) return NextResponse.json({ error: "This invitation has already been accepted or expired." }, { status: 409 });
+
   const { error: profileError } = await admin.from("profiles").upsert({
     id: activeUserId,
     college_id: invitation.college_id,
@@ -87,10 +104,7 @@ export async function POST(request: Request) {
     email: resolvedEmail.toLowerCase(),
     status: "active",
   }, { onConflict: "id" });
-  if (profileError) return NextResponse.json({ error: "Could not activate this account." }, { status: 500 });
-
-  const { error: acceptedError } = await admin.from("college_invitations").update({ accepted_at: new Date().toISOString() }).eq("id", invitation.id).is("accepted_at", null);
-  if (acceptedError) return NextResponse.json({ error: "Account activated, but invitation finalization failed. Contact your college administrator." }, { status: 500 });
+  if (profileError) return NextResponse.json({ error: "The invitation was claimed but profile activation failed. Contact your college administrator to reissue it." }, { status: 500 });
   await admin.from("activity_logs").insert({ college_id: invitation.college_id, actor_id: activeUserId, action: "invitation.accepted", entity_type: "profile", entity_id: activeUserId, details: { role: invitation.role } });
   return NextResponse.json({ success: true, redirectTo: "/dashboard" });
 }

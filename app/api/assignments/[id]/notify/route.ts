@@ -27,12 +27,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     console.error("Assignment notification roster lookup failed", { code: rosterError.code, message: rosterError.message });
     return NextResponse.json({ error: "Could not read the class roster for notifications." }, { status: 500 });
   }
+  let notified = 0;
   if (roster?.length) {
-    const { error } = await admin.from("notifications").insert(roster.map((item) => ({ college_id: assignment.college_id, user_id: item.student_id, type: "assignment.published", title: "New assignment", body: assignment.title, href: `/assignments/${assignment.id}` })));
+    const { data, error } = await admin.from("notifications").upsert(roster.map((item) => ({ college_id: assignment.college_id, user_id: item.student_id, type: "assignment.published", title: "New assignment", body: assignment.title, href: `/assignments/${assignment.id}`, reference_key: `assignment-published:${assignment.id}:${item.student_id}` })), { onConflict: "user_id,reference_key", ignoreDuplicates: true }).select("id");
     if (error) {
       console.error("Assignment notification creation failed", { code: error.code, message: error.message });
       return NextResponse.json({ error: "Assignment published, but notifications could not be sent." }, { status: 500 });
     }
+    notified = data?.length ?? 0;
   }
-  return NextResponse.json({ success: true, notified: roster?.length ?? 0 });
+  return NextResponse.json({ success: true, notified });
 }

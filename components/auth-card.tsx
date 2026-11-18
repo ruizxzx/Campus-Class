@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { BrandMark } from "@/components/ui";
+import { safeInternalPath } from "@/lib/safe-navigation";
 import { ArrowLeft, ArrowRight, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 type AuthMode = "login" | "register" | "forgot" | "reset" | "invite";
@@ -26,7 +27,7 @@ export function AuthCard({ mode, token = "" }: { mode: AuthMode; token?: string 
         const { error: authError } = await supabase.auth.signInWithPassword({ email: form.email.trim().toLowerCase(), password: form.password });
         if (authError) throw authError;
         const next = new URLSearchParams(window.location.search).get("next");
-        router.replace(next?.startsWith("/") ? next : "/dashboard"); router.refresh();
+        router.replace(safeInternalPath(next)); router.refresh();
       } else if (mode === "register") {
         const { error: authError } = await supabase.auth.signUp({
           email: form.email.trim().toLowerCase(), password: form.password,

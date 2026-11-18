@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requestProfile, isResponse } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { classScheduleSchema } from "@/lib/validators";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
     if (error.code === "23505") return NextResponse.json({ error: "A schedule entry already exists at that class and start time." }, { status: 409 });
     if (error.code === "42P01") return NextResponse.json({ error: "The timetable database migration has not been applied. Ask an administrator to apply the latest Supabase migrations." }, { status: 503 });
     console.error("Schedule entry insert failed", { code: error.code, message: error.message });
-    return NextResponse.json({ error: "Could not save the timetable entry.", code: error.code }, { status: 500 });
+    return NextResponse.json({ error: "Could not save the timetable entry." }, { status: 500 });
   }
   return NextResponse.json({ success: true });
 }
@@ -52,9 +53,9 @@ export async function DELETE(request: Request) {
   if (!["admin", "faculty"].includes(context.profile.role)) {
     return NextResponse.json({ error: "Only faculty and administrators can delete timetable entries." }, { status: 403 });
   }
-  const parsed = await request.json().catch(() => null) as { id?: unknown };
-  const id = typeof parsed?.id === "string" ? parsed.id : "";
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: "Invalid schedule entry." }, { status: 400 });
+  const parsed = z.object({ id: z.string().uuid() }).safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid schedule entry." }, { status: 400 });
+  const id = parsed.data.id;
   const admin = createAdminClient();
   const { data: entry } = await admin.from("class_schedule_entries").select("id,class_id").eq("id", id).eq("college_id", context.profile.college_id).maybeSingle();
   if (!entry) return NextResponse.json({ error: "Schedule entry not found." }, { status: 404 });
