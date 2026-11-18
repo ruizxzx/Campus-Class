@@ -104,6 +104,32 @@ export function ScheduleManager({ classes, entries, canManage }: { classes: Clas
   const router = useRouter();
   const [form, setForm] = useState({ classId: "", weekday: "1", startTime: "09:00", endTime: "10:00", location: "", notes: "" });
   const [saving, setSaving] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ start_time: string; end_time: string }[]>([]);
+  const [finding, setFinding] = useState(false);
+
+  async function suggestTimes() {
+    const [sh, sm] = form.startTime.split(":").map(Number);
+    const [eh, em] = form.endTime.split(":").map(Number);
+    const duration = (eh * 60 + em) - (sh * 60 + sm);
+    if (!form.classId || duration < 15 || duration > 240) {
+      toast.error("Choose a class and a duration between 15 minutes and 4 hours.");
+      return;
+    }
+    setFinding(true);
+    try {
+      const response = await fetch("/api/schedules/suggest", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ class_id: form.classId, weekday: Number(form.weekday),
+          duration_minutes: duration, location: form.location }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error ?? "Could not find free slots.");
+      setSuggestions(result.suggestions ?? []);
+      if (!result.suggestions?.length) toast.message("No free slots in the 8 AM–6 PM search window.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load suggestions.");
+    } finally { setFinding(false); }
+  }
 
   async function add(event: React.FormEvent) {
     event.preventDefault();
@@ -154,6 +180,9 @@ export function ScheduleManager({ classes, entries, canManage }: { classes: Clas
       </div>
       <label className="block text-xs font-semibold">Location<input className="input-base mt-2" maxLength={180} value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} placeholder="Room or online link"/></label>
       <label className="block text-xs font-semibold">Notes<textarea className="input-base mt-2 min-h-20 resize-y" maxLength={2000} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })}/></label>
+      <button type="button" className="btn-secondary w-full" disabled={finding || saving || !form.classId} onClick={suggestTimes}>{finding ? "Checking availability…" : "Suggest free time slots"}</button>
+      {!!suggestions.length && <div className="flex flex-wrap gap-2" aria-label="Suggested timetable slots">{suggestions.map((slot) =>
+        <button key={slot.start_time} type="button" className="rounded-lg border border-[var(--line)] bg-[var(--green-soft)] px-3 py-2 text-xs font-semibold" onClick={() => { setForm({ ...form, startTime: slot.start_time, endTime: slot.end_time }); setSuggestions([]); }}>{slot.start_time}–{slot.end_time}</button>)}</div>}
       <button className="btn-primary w-full" disabled={saving || !form.classId}>{saving ? "Saving…" : "Add to timetable"}<CalendarPlus size={14}/></button>
     </form> : null}
     <section className="surface min-w-0 p-4 sm:p-5">
