@@ -24,7 +24,7 @@ test("invalid quiz samples are excluded", () => {
   assert.equal(data.level,"on_track");
 });
 
-test("multiple attempts in a quiz count as a single latest released score", () => {
+test("multiple attempts in a quiz count as a single best released score", () => {
   const released = releasedQuizEvidence([
     {student_id:"one",quiz_id:"quiz-1",attempt_number:1,score:20},
     {student_id:"one",quiz_id:"quiz-1",attempt_number:3,score:70},
@@ -34,6 +34,13 @@ test("multiple attempts in a quiz count as a single latest released score", () =
   ], new Map([["quiz-1",100],["quiz-2",10]]));
   assert.deepEqual(released.get("one"),[70,90]);
   assert.deepEqual(released.get("two"),[55]);
+});
+test("a lower recent attempt cannot degrade the official best score",()=>{
+  const released=releasedQuizEvidence([
+    {student_id:"one",quiz_id:"quiz-1",attempt_number:1,score:95},
+    {student_id:"one",quiz_id:"quiz-1",attempt_number:2,score:30},
+  ],new Map([["quiz-1",100]]));
+  assert.deepEqual(released.get("one"),[95]);
 });
 test("missing or invalid quiz scores do not become zero", () => {
   const released = releasedQuizEvidence([
