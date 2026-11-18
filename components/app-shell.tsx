@@ -5,10 +5,10 @@ import { useTheme } from "next-themes";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types/database";
 import { BrandMark } from "@/components/ui";
-import { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, Sun, Moon, LogOut, Plus, CalendarDays, ChartNoAxesCombined, School, ChevronDown, Menu, X, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower } from "lucide-react";
+import { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, Sun, Moon, LogOut, Plus, CalendarDays, ChartNoAxesCombined, School, ChevronDown, Menu, X, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower, PenLine } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
-const iconMap = { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, CalendarDays, ChartNoAxesCombined, School, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower } as const;
+const iconMap = { LayoutDashboard, Users, GraduationCap, Building2, BookOpen, ClipboardList, FileText, Megaphone, Bell, UserRound, Settings, CalendarDays, ChartNoAxesCombined, School, MessageCircle, NotebookPen, ListChecks, Award, BrainCircuit, MessagesSquare, RadioTower, PenLine } as const;
 type NavItem = { label: string; href: string; icon: keyof typeof iconMap };
 
 function itemsFor(role: Profile["role"]): { section: string; items: NavItem[] }[] {
@@ -18,7 +18,7 @@ function itemsFor(role: Profile["role"]): { section: string; items: NavItem[] }[
     { section: "Personal", items: [{ label: "Notifications", href: "/notifications", icon: "Bell" }, { label: "Profile", href: "/profile", icon: "UserRound" }, { label: "College settings", href: "/admin/settings", icon: "Settings" }] },
   ];
   if (role === "faculty") return [
-    { section: "Teaching", items: [{ label: "Overview", href: "/dashboard", icon: "LayoutDashboard" }, { label: "My classes", href: "/faculty/classes", icon: "School" }, { label: "Assignments", href: "/faculty/assignments", icon: "FileText" }, { label: "Submissions", href: "/faculty/submissions", icon: "ClipboardList" }, { label: "Announcements", href: "/announcements", icon: "Megaphone" }, { label: "Class stream", href: "/stream", icon: "RadioTower" }, { label: "Class chat", href: "/chat", icon: "MessagesSquare" }, { label: "Courses & learning", href: "/courses", icon: "BookOpen" }, { label: "Quizzes & exams", href: "/quizzes", icon: "ClipboardList" }, { label: "My notes", href: "/notes", icon: "NotebookPen" }, { label: "To-do", href: "/todo", icon: "ListChecks" }] },
+    { section: "Teaching", items: [{ label: "Overview", href: "/dashboard", icon: "LayoutDashboard" }, { label: "My classes", href: "/faculty/classes", icon: "School" }, { label: "Assignments", href: "/faculty/assignments", icon: "FileText" }, { label: "Submissions", href: "/faculty/submissions", icon: "ClipboardList" }, { label: "Learning studio", href: "/faculty/learning", icon: "PenLine" }, { label: "Announcements", href: "/announcements", icon: "Megaphone" }, { label: "Class stream", href: "/stream", icon: "RadioTower" }, { label: "Class chat", href: "/chat", icon: "MessagesSquare" }, { label: "Courses & learning", href: "/courses", icon: "BookOpen" }, { label: "Quizzes & exams", href: "/quizzes", icon: "ClipboardList" }, { label: "My notes", href: "/notes", icon: "NotebookPen" }, { label: "To-do", href: "/todo", icon: "ListChecks" }] },
     { section: "Personal", items: [{ label: "Notifications", href: "/notifications", icon: "Bell" }, { label: "Profile", href: "/profile", icon: "UserRound" }, { label: "Settings", href: "/settings", icon: "Settings" }] },
   ];
   return [
