@@ -3,6 +3,13 @@
 begin;
 create schema if not exists extensions;
 create extension if not exists vector with schema extensions;
+do $
+begin
+  if not exists(select 1 from pg_extension e join pg_namespace n on n.oid=e.extnamespace
+    where e.extname='vector' and n.nspname='extensions') then
+    raise exception 'pgvector must be installed in the extensions schema before applying this migration';
+  end if;
+end $;
 
 create table if not exists public.syllabus_text_chunks(
   id uuid primary key default gen_random_uuid(),

@@ -150,3 +150,38 @@ reload. The service-role client needs `SUPABASE_SERVICE_ROLE_KEY` and
 Supabase connection settings and does not execute these authenticated queries
 against the owner's Campus Class database. A DB-level error code is now logged
 server-side for diagnosis. Do not substitute an empty grade for a query failure.
+
+## Syllabus PDF text extraction and pgvector retrieval (forward SQL 036)
+
+After applying [036: syllabus pgvector index](../supabase/migrations/202611190036_syllabus_pgvector_index.sql),
+open **Syllabus** as authorized faculty/admin. Each document has an
+**Index / re-index PDF** action. It reads the **file-parser text annotations**
+returned by OpenRouter, NOT a model-generated summary. You may opt into
+**paid OCR** for scanned PDFs. Only the document's class-assigned faculty or a
+college administrator may start indexing. Indexing is limited to 20 MB PDFs,
+120,000 extracted characters and 96 chunks per PDF; documents beyond a limit
+fail without replacing any previous index.
+
+Only explicitly available PDF form-feed page breaks yield page numbers. The
+index never guesses a page number from an ordinary paragraph. Other excerpts
+are cited at the document level.
+
+Extracted text is chunked and embedded through the college's private
+OpenRouter Vault key using `openai/text-embedding-3-small` with 1536 dimensions.
+Both provider calls and the existing chat assistant use the database-backed
+AI quota. A service-only transactional RPC replaces the index after ALL
+embeddings have succeeded. Deleting syllabus metadata cascades to its indexed
+chunks; no raw vector data is accessible through student/anonymous API roles.
+
+On a student Copilot request, the server first checks whether any indexed
+syllabus from an enrolled class exists. If so, it embeds the query and
+retrieves relevant same-college chunks using a service-only match function
+that ALSO validates active student enrollment. Excerpts receive `[R1]`
+style citations. Missing migration 036, no indexed content or an unavailable
+embedding provider falls back to existing published text/outline assistance
+rather than disclosing arbitrary document content or causing a page crash.
+
+Run `supabase/tests/syllabus_rag_security.test.sql` only on disposable
+staging database after applying migrations, and verify cross-college isolation
+with two simulated colleges. No live Supabase migration or tenant fixture
+security test has been executed by the assistant.

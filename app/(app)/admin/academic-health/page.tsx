@@ -22,6 +22,7 @@ const checks:{label:string;table:string;columns:string;migration:string}[]=[
   {label:"Reusable question bank",table:"question_bank_items",columns:"college_id",migration:"033"},
   {label:"Class gradebook policies",table:"class_gradebook_policies",columns:"college_id",migration:"034"},
   {label:"Student Success rules",table:"student_success_rules",columns:"college_id",migration:"035"},
+  {label:"Syllabus PDF vector index",table:"syllabus_text_chunks",columns:"college_id",migration:"036"},
 ];
 const migrations=[
   ["026","202611180026_campusclass_20_academic_intelligence.sql"],
@@ -34,6 +35,7 @@ const migrations=[
   ["033","202611180033_question_bank.sql"],
   ["034","202611180034_class_gradebook_policies.sql"],
   ["035","202611180035_student_success_rules.sql"],
+  ["036","202611190036_syllabus_pgvector_index.sql"],
 ];
 export default async function AcademicHealthPage(){
   await requireRole(["admin"]);
