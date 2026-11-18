@@ -9,8 +9,10 @@ export const dynamic="force-dynamic";
 
 const checks:{label:string;table:string;columns:string;migration:string}[]=[
   {label:"College profiles",table:"profiles",columns:"college_id",migration:"Core"},
-  {label:"Academic classes",table:"classes",columns:"college_id",migration:"Core"},
-  {label:"Quiz attempts",table:"quiz_attempts",columns:"college_id",migration:"Existing"},
+  {label:"Academic classes",table:"classes",columns:"college_id",migration:"037"},
+  {label:"Academic subjects",table:"subjects",columns:"name",migration:"037"},
+  {label:"Published quizzes",table:"quizzes",columns:"id",migration:"037"},
+  {label:"Quiz attempts",table:"quiz_attempts",columns:"college_id",migration:"037"},
   {label:"Attendance sessions",table:"attendance_sessions",columns:"college_id",migration:"026"},
   {label:"Attendance records",table:"attendance_records",columns:"college_id",migration:"026"},
   {label:"Course outcomes",table:"course_outcomes",columns:"college_id",migration:"026"},
@@ -36,6 +38,7 @@ const migrations=[
   ["034","202611180034_class_gradebook_policies.sql"],
   ["035","202611180035_student_success_rules.sql"],
   ["036","202611190036_syllabus_pgvector_index.sql"],
+  ["037","202611190037_academic_service_read_grants.sql"],
 ];
 export default async function AcademicHealthPage(){
   await requireRole(["admin"]);
@@ -67,6 +70,7 @@ export default async function AcademicHealthPage(){
       </section>
       <section className="surface p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><Database size={17}/>Database readiness</h2>
+        <p className="mt-2 text-xs text-[var(--muted)]">A 42501 permission error on classes, subjects, quizzes or quiz attempts may indicate missing service-role SELECT grants. Apply <a className="underline" target="_blank" rel="noopener noreferrer" href="https://github.com/ruizxzx/Campus-Class/blob/main/supabase/migrations/202611190037_academic_service_read_grants.sql">SQL 037</a> in the correct Supabase project, then reload. If permissions remain denied, verify the production service-role key belongs to that same project.</p>
         <div className="mt-3 table-wrap"><table className="table-base min-w-[560px]"><thead>
           <tr><th>Requirement</th><th>Migration</th><th>Result</th></tr></thead><tbody>
           {statuses.map((check)=><tr key={check.label}>
