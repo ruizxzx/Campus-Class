@@ -59,7 +59,7 @@ export default async function AcademicHealthPage(){
       <section className="surface p-5" role="status">
         <div className="flex items-start gap-3">{failed.length?<AlertTriangle size={20} className="text-amber-600"/>:<CheckCircle2 size={20} className="text-[var(--green)]"/>}
           <div><h2 className="text-sm font-semibold">{failed.length?failed.length+" academic checks need attention":"All checked database endpoints are accessible"}</h2>
-            <p className="mt-1 text-xs leading-6 text-[var(--muted)]">These are read-only checks using the server's service-role connection. They do not modify student data or prove RLS correctness.</p>
+            <p className="mt-1 text-xs leading-6 text-[var(--muted)]">These are read-only checks using the server&apos;s service-role connection. They do not modify student data or prove RLS correctness.</p>
           </div>
         </div>
       </section>
@@ -82,7 +82,7 @@ export default async function AcademicHealthPage(){
           <a key={num} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between rounded-xl border border-[var(--line)] p-3 text-xs hover:bg-[var(--surface-2)]"
              href={"https://github.com/ruizxzx/Campus-Class/blob/main/supabase/migrations/"+file}>
             SQL {num} <ExternalLink size={13}/></a>)}</div>
-        <p className="mt-4 text-xs leading-6 text-[var(--muted)]">After migration 032, sign in to <Link href="/admin/ai" className="underline">Admin AI Settings</Link> and save the college's OpenRouter API key again. Existing ciphertext cannot be decrypted with a missing original server master key.</p>
+        <p className="mt-4 text-xs leading-6 text-[var(--muted)]">After migration 032, sign in to <Link href="/admin/ai" className="underline">Admin AI Settings</Link> and save the college&apos;s OpenRouter API key again. Existing ciphertext cannot be decrypted with a missing original server master key.</p>
         <p className="mt-2 text-xs"><a className="underline" target="_blank" rel="noopener noreferrer"
           href="https://github.com/ruizxzx/Campus-Class/blob/main/docs/CAMPUSCLASS_2_0_COMPLETION.md">Full rollout and acceptance checklist</a></p>
       </section>

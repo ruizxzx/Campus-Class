@@ -17,7 +17,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   catch{
     academicLog("Gradebook.configuration", {code:"SERVER_CONFIG"});
     return <><PageHeader title="Gradebook" description="Private academic reporting."/>
-      <AcademicDataState module="Gradebook" issue="configuration" admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Gradebook" issue="configuration" admin={profile.role==="admin"}/></>;
   }
   const collegeId = profile.college_id;
   const membership = profile.role === "admin"
@@ -28,7 +28,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   if(membership?.error){
     academicLog("gradebook.membership",membership.error);
     return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/>
-      <AcademicDataState module="Gradebook" issue={academicIssueFor(membership.error)} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Gradebook" issue={academicIssueFor(membership.error)} admin={profile.role==="admin"}/></>;
   }
   const permittedIds = membership?.data?.map((row) => row.class_id) ?? [];
   const listQuery = db.from("classes").select("id,display_name,section,subjects(name)")
@@ -39,7 +39,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   if(classError){
     academicLog("gradebook.classes",classError);
     return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/>
-      <AcademicDataState module="Gradebook" issue={academicIssueFor(classError)} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Gradebook" issue={academicIssueFor(classError)} admin={profile.role==="admin"}/></>;
   }
   const classes = (classrooms ?? []).map((item) => {
     const subject = Array.isArray(item.subjects) ? item.subjects[0] : item.subjects;
@@ -62,7 +62,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   if(initialError){
     academicLog("gradebook.initial",initialError);
     return <><PageHeader title="Academic gradebook" description="Published coursework, scores and attendance."/>
-      <AcademicDataState module="Gradebook" issue={academicIssueFor(initialError)} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Gradebook" issue={academicIssueFor(initialError)} admin={profile.role==="admin"}/></>;
   }
   const ids = profile.role === "student" ? [profile.id] : (roster.data ?? []).map((item) => item.student_id);
   const assignmentIds = (assignmentResult.data ?? []).map((item) => item.id);
@@ -89,7 +89,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
     const error=profilesResult.error||submissionResult.error||attemptsResult.error||attendanceResult.error;
     academicLog("gradebook.evidence",error??{code:"INCOMPLETE"});
     return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/>
-      <AcademicDataState module="Gradebook" issue={error?academicIssueFor(error):"incomplete"} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Gradebook" issue={error?academicIssueFor(error):"incomplete"} admin={profile.role==="admin"}/></>;
   }
   // Explicit per-class grading policy is optional. Without it we display
   // descriptive recorded-score averages, never invent an official weighting.
@@ -100,7 +100,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   if (policyError && !missingPolicyTable) {
     academicLog("gradebook.policy",policyError);
     return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/>
-      <AcademicDataState module="Gradebook" issue={academicIssueFor(policyError)} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Gradebook" issue={academicIssueFor(policyError)} admin={profile.role==="admin"}/></>;
   }
   const gradeWeights: GradeWeights | null = policyRow ? {
     assignment_weight: Number(policyRow.assignment_weight),
@@ -120,7 +120,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   if (evaluationResult.error || evaluationResult.truncated) {
     academicLog("gradebook.evaluations",evaluationResult.error??{code:"INCOMPLETE"});
     return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/>
-      <AcademicDataState module="Gradebook" issue={evaluationResult.error?academicIssueFor(evaluationResult.error):"incomplete"} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Gradebook" issue={evaluationResult.error?academicIssueFor(evaluationResult.error):"incomplete"} admin={profile.role==="admin"}/></>;
   }
   const assignmentMarks=releasedAssignmentMarks(submissions,evaluationResult.data);
   const quizMarks=bestReleasedQuizScores(attemptsResult.data);

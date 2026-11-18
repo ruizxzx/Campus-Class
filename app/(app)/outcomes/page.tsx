@@ -14,7 +14,7 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
   catch{
     academicLog("Outcomes.configuration", {code:"SERVER_CONFIG"});
     return <><PageHeader title="Outcomes" description="Private academic reporting."/>
-      <AcademicDataState module="Outcomes" issue="configuration" admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Outcomes" issue="configuration" admin={profile.role==="admin"}/></>;
   }
   const collegeId = profile.college_id;
   const relations = profile.role === "faculty"
@@ -22,7 +22,7 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
     : { data: null, error: null };
   if(relations.error){academicLog("outcomes.membership",relations.error);
     return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
-      <AcademicDataState module="Outcomes" issue={academicIssueFor(relations.error)} admin={profile.role==="admin"}/></>;}
+      <AcademicDataState area="Outcomes" issue={academicIssueFor(relations.error)} admin={profile.role==="admin"}/></>;}
   const classIds = relations.data?.map((item) => item.class_id) ?? [];
   const query = db.from("classes").select("id,subject_id,display_name,section,subjects(name,code)")
     .eq("college_id", collegeId).eq("is_active", true);
@@ -31,7 +31,7 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
     : classIds.length ? await query.in("id", classIds).limit(200) : { data: [], error: null };
   if(classesError){academicLog("outcomes.classes",classesError);
     return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
-      <AcademicDataState module="Outcomes" issue={academicIssueFor(classesError)} admin={profile.role==="admin"}/></>;}
+      <AcademicDataState area="Outcomes" issue={academicIssueFor(classesError)} admin={profile.role==="admin"}/></>;}
   const classes = (rawClasses ?? []).map((item) => {
     const subject = Array.isArray(item.subjects) ? item.subjects[0] : item.subjects;
     return { id:item.id, subjectId:item.subject_id, name:(subject?.code ?? subject?.name ?? "Class") + " · " + item.section };
@@ -49,7 +49,7 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
     const error=outcomeResponse.error||assignmentResponse.error||quizResponse.error;
     academicLog("outcomes.initial",error);
     return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
-      <AcademicDataState module="Outcomes" issue={academicIssueFor(error)} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Outcomes" issue={academicIssueFor(error)} admin={profile.role==="admin"}/></>;
   }
   const outcomeIds = (outcomeResponse.data ?? []).map((item) => item.id);
   const { data: allMappings, error: mappingsError } = outcomeIds.length
@@ -57,7 +57,7 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
     : { data: [], error: null };
   if(mappingsError){academicLog("outcomes.mappings",mappingsError);
     return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
-      <AcademicDataState module="Outcomes" issue={academicIssueFor(mappingsError)} admin={profile.role==="admin"}/></>;}
+      <AcademicDataState area="Outcomes" issue={academicIssueFor(mappingsError)} admin={profile.role==="admin"}/></>;}
 
   const assignmentIds = (assignmentResponse.data ?? []).map((item) => item.id);
   const quizIds = (quizResponse.data ?? []).map((item) => item.id);
@@ -77,7 +77,7 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
     const error=subsResult.error||quizScoresResult.error;
     academicLog("outcomes.evidence",error??{code:"INCOMPLETE"});
     return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
-      <AcademicDataState module="Outcomes" issue={error?academicIssueFor(error):"incomplete"} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Outcomes" issue={error?academicIssueFor(error):"incomplete"} admin={profile.role==="admin"}/></>;
   }
 
   const submissionIds=subsResult.data.map((row)=>row.id);
@@ -88,7 +88,7 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
   if(evaluationResult.error||evaluationResult.truncated){
     academicLog("outcomes.evaluations",evaluationResult.error??{code:"INCOMPLETE"});
     return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
-      <AcademicDataState module="Outcomes" issue={evaluationResult.error?academicIssueFor(evaluationResult.error):"incomplete"} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Outcomes" issue={evaluationResult.error?academicIssueFor(evaluationResult.error):"incomplete"} admin={profile.role==="admin"}/></>;
   }
 
   const assignmentScores=releasedAssignmentMarks(subsResult.data,evaluationResult.data);

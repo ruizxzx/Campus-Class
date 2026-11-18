@@ -18,7 +18,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   catch{
     academicLog("Student Success.configuration", {code:"SERVER_CONFIG"});
     return <><PageHeader title="Student Success" description="Private academic reporting."/>
-      <AcademicDataState module="Student Success" issue="configuration" admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Student Success" issue="configuration" admin={profile.role==="admin"}/></>;
   }
   const collegeId = profile.college_id;
   const classRelations = profile.role === "faculty"
@@ -26,7 +26,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     : { data: null, error: null };
   if(classRelations.error){academicLog("success.membership",classRelations.error);
     return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
-      <AcademicDataState module="Student Success" issue={academicIssueFor(classRelations.error)} admin={profile.role==="admin"}/></>;}
+      <AcademicDataState area="Student Success" issue={academicIssueFor(classRelations.error)} admin={profile.role==="admin"}/></>;}
   const ids = classRelations.data?.map((item) => item.class_id) ?? [];
   const classQuery = db.from("classes").select("id,display_name,section,subjects(name,code)")
     .eq("college_id", collegeId).eq("is_active", true).order("display_name");
@@ -35,7 +35,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     : ids.length ? await classQuery.in("id", ids).limit(200) : { data: [], error: null };
   if(classesError){academicLog("success.classes",classesError);
     return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
-      <AcademicDataState module="Student Success" issue={academicIssueFor(classesError)} admin={profile.role==="admin"}/></>;}
+      <AcademicDataState area="Student Success" issue={academicIssueFor(classesError)} admin={profile.role==="admin"}/></>;}
   const classOptions = (classrooms ?? []).map((item) => {
     const subject = Array.isArray(item.subjects) ? item.subjects[0] : item.subjects;
     return { id: item.id, name: (subject?.name ?? item.display_name ?? "Class") + " · " + item.section };
@@ -78,7 +78,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     const error=errors.find((item)=>item.error)?.error;
     academicLog("success.evidence",error??{code:"INCOMPLETE"});
     return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
-      <AcademicDataState module="Student Success" issue={error?academicIssueFor(error):"incomplete"} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Student Success" issue={error?academicIssueFor(error):"incomplete"} admin={profile.role==="admin"}/></>;
   }
   const studentIds = (rosterResult.data ?? []).map((item) => item.student_id);
   const { data: profiles, error: profileError } = studentIds.length
@@ -86,7 +86,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     : { data: [], error: null };
   if(profileError){academicLog("success.roster",profileError);
     return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
-      <AcademicDataState module="Student Success" issue={academicIssueFor(profileError)} admin={profile.role==="admin"}/></>;}
+      <AcademicDataState area="Student Success" issue={academicIssueFor(profileError)} admin={profile.role==="admin"}/></>;}
   const names = new Map((profiles ?? []).map((item) => [item.id, { name: item.full_name, email: item.email }]));
   const assignmentIds = new Set((assignmentsResult.data ?? []).map((item) => item.id));
   const quizMap = new Map((quizResult.data ?? []).map((quiz) => [quiz.id, Number(quiz.max_marks)]));
@@ -103,7 +103,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   if(rulesError&&!missingRulesTable){
     academicLog("success.rules",rulesError);
     return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
-      <AcademicDataState module="Student Success" issue={academicIssueFor(rulesError)} admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Student Success" issue={academicIssueFor(rulesError)} admin={profile.role==="admin"}/></>;
   }
   const rules:SupportRules=savedRules?{
     attendance_min_percent:Number(savedRules.attendance_min_percent),
@@ -116,7 +116,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   if(!validSupportRules(rules)){
     academicLog("success.rules", {code:"INVALID_RULES"});
     return <><PageHeader title="Student Success Intelligence" description="Explainable academic support."/>
-      <AcademicDataState module="Student Success" issue="unavailable" admin={profile.role==="admin"}/></>;
+      <AcademicDataState area="Student Success" issue="unavailable" admin={profile.role==="admin"}/></>;
   }
 
   const now = nowEpochMs();

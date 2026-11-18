@@ -24,8 +24,8 @@ const messages:Record<AcademicIssue,{title:string;detail:string}>={
     detail:"A required server-side database connection is unavailable. An administrator must review the server deployment settings.",
   },
 };
-export function AcademicDataState({module,issue,admin=false}:{
-  module:"Student Success"|"Gradebook"|"Outcomes";issue:AcademicIssue;admin?:boolean;
+export function AcademicDataState({area,issue,admin=false}:{
+  area:"Student Success"|"Gradebook"|"Outcomes";issue:AcademicIssue;admin?:boolean;
 }){
   const item=messages[issue];
   return <section role="alert" aria-live="polite" className="surface mx-auto max-w-3xl p-5 sm:p-8">
@@ -34,7 +34,7 @@ export function AcademicDataState({module,issue,admin=false}:{
       <div className="min-w-0">
         <h2 className="text-base font-semibold">{item.title}</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{item.detail}</p>
-        <p className="mt-3 text-xs leading-5 text-[var(--muted)]">{module} is not currently able to show a verified dataset. Existing student records are not changed by this screen.</p>
+        <p className="mt-3 text-xs leading-5 text-[var(--muted)]">{area} is not currently able to show a verified dataset. Existing student records are not changed by this screen.</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {admin&&<Link href="/admin/academic-health" className="btn-primary">Open academic diagnostics</Link>}
           <a href="" className="btn-secondary">Reload page</a>
