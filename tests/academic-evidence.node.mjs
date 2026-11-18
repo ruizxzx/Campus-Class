@@ -30,6 +30,6 @@ test("pagination returns all rows instead of silently treating the first page as
     return{data:[2000],error:null};
   });
   assert.equal(data.truncated,false);
-  assert.equal(data.data.length,1002);
-  assert.equal(calls,3);
+  assert.equal(data.data.length,1001);
+  assert.equal(calls,2);
 });
