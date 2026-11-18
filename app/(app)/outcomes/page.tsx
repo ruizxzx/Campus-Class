@@ -73,11 +73,12 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
   ]);
   if(subsResult.error||quizScoresResult.error||subsResult.truncated||quizScoresResult.truncated
      ||(outcomeResponse.data?.length??0)>=100||(assignmentResponse.data?.length??0)>=100
-     ||(quizResponse.data?.length??0)>=100||(allMappings?.length??0)>=300)
+     ||(quizResponse.data?.length??0)>=100||(allMappings?.length??0)>=300){
     const error=subsResult.error||quizScoresResult.error;
     academicLog("outcomes.evidence",error??{code:"INCOMPLETE"});
     return <><PageHeader title="Course outcomes" description="Evidence-informed course attainment."/>
       <AcademicDataState module="Outcomes" issue={error?academicIssueFor(error):"incomplete"} admin={profile.role==="admin"}/></>;
+  }
 
   const submissionIds=subsResult.data.map((row)=>row.id);
   const evaluationResult=await collectEvidence<{id:string;submission_id:string;marks:number;released_at:string|null}>(
