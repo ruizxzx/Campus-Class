@@ -60,7 +60,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
         .in("assignment_id",batch).in("student_id",ids).order("id").range(from,to)),
     collectEvidence<{ id:string; quiz_id:string; student_id:string; score:number|null; released_at:string|null }>(quizIds, async (batch,from,to) =>
       db.from("quiz_attempts").select("id,quiz_id,student_id,score,released_at").eq("college_id",collegeId)
-        .in("quiz_id",batch).in("student_id",ids).order("id").range(from,to)),
+        .in("quiz_id",batch).in("student_id",ids).lte("released_at",new Date(nowEpochMs()).toISOString()).order("id").range(from,to)),
     collectEvidence<{ id:string; student_id:string; session_id:string; status:string }>(sessionIds, async (batch,from,to) =>
       db.from("attendance_records").select("id,student_id,session_id,status").eq("college_id",collegeId)
         .in("session_id",batch).in("student_id",ids).order("id").range(from,to)),
@@ -95,7 +95,7 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
   const evaluationResult=await collectEvidence<{ id:string; submission_id:string; marks:number; released_at:string|null }>(
     submissionIds, async (batch,from,to)=>db.from("assignment_evaluations")
       .select("id,submission_id,marks,released_at").eq("college_id",collegeId)
-      .in("submission_id",batch).order("id").range(from,to));
+      .in("submission_id",batch).lte("released_at",new Date(nowEpochMs()).toISOString()).order("id").range(from,to));
   if (evaluationResult.error || evaluationResult.truncated) {
     throw new Error("Gradebook evaluation evidence is incomplete.");
   }

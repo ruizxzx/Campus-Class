@@ -2,6 +2,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader, EmptyState } from "@/components/ui";
 import { format } from "date-fns";
+import { nowEpochMs } from "@/lib/time";
 
 type Evaluation = {
   marks: number;
@@ -39,7 +40,8 @@ export default async function ResultsPage() {
   const visible = ((submissions ?? []) as SubmissionResult[]).flatMap((submission) => {
     const relation = submission.assignment_evaluations;
     const evaluations = Array.isArray(relation) ? relation : relation ? [relation] : [];
-    const evaluation = evaluations.find((item): item is Evaluation & { released_at: string } => item.released_at !== null);
+    const evaluation = evaluations.find((item): item is Evaluation & { released_at: string } =>
+      item.released_at !== null && Date.parse(item.released_at) <= nowEpochMs());
     return evaluation ? [{ submission, assignment: firstRelation(submission.assignments), evaluation }] : [];
   });
 

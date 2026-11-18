@@ -40,7 +40,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   const [rosterResult, assignmentsResult, quizResult, sessionsResult, recordsResult, interventionsResult] = await Promise.all([
     db.from("class_enrollments").select("student_id").eq("college_id", collegeId).eq("class_id", classId).eq("status", "active").limit(1000),
     db.from("assignments").select("id,due_at").eq("college_id", collegeId).eq("class_id", classId).eq("status", "published").limit(1000),
-    db.from("quizzes").select("id,max_marks").eq("college_id", collegeId).eq("class_id", classId).limit(1000),
+    db.from("quizzes").select("id,max_marks").eq("college_id", collegeId).eq("class_id", classId).eq("status","published").limit(1000),
     db.from("attendance_sessions").select("id,starts_at,expires_at,closed_at").eq("college_id", collegeId).eq("class_id", classId).limit(1000),
     collectEvidence<{session_id:string;student_id:string;status:string}>([classId],
       async(batch,from,to)=>db.from("attendance_records")
@@ -62,7 +62,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     collectEvidence<{ quiz_id: string; student_id: string; score: number | null; attempt_number: number; released_at:string|null }>(quizIds, async (batch, from, to) =>
       db.from("quiz_attempts").select("quiz_id,student_id,score,attempt_number,released_at")
         .eq("college_id", collegeId).in("quiz_id", batch)
-        .not("released_at", "is", null).order("id").range(from,to)),
+        .lte("released_at",new Date(nowEpochMs()).toISOString()).order("id").range(from,to)),
   ]);
   const errors = [rosterResult,assignmentsResult,submissionResult,quizResult,attemptsResult,sessionsResult,recordsResult,interventionsResult]
     .filter((result) => Boolean(result.error));

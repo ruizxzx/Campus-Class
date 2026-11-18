@@ -52,7 +52,7 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
     collectEvidence<{id:string;quiz_id:string;student_id:string;score:number|null;released_at:string|null}>(quizIds,
       async(batch,from,to)=>db.from("quiz_attempts")
         .select("id,quiz_id,student_id,score,released_at").eq("college_id",collegeId)
-        .in("quiz_id",batch).not("released_at","is",null).order("id").range(from,to)),
+        .in("quiz_id",batch).lte("released_at",new Date().toISOString()).order("id").range(from,to)),
   ]);
   if(subsResult.error||quizScoresResult.error||subsResult.truncated||quizScoresResult.truncated
      ||(outcomeResponse.data?.length??0)>=100||(assignmentResponse.data?.length??0)>=100
@@ -63,7 +63,7 @@ export default async function OutcomesPage({ searchParams }: { searchParams: Pro
   const evaluationResult=await collectEvidence<{id:string;submission_id:string;marks:number;released_at:string|null}>(
     submissionIds,async(batch,from,to)=>db.from("assignment_evaluations")
       .select("id,submission_id,marks,released_at").eq("college_id",collegeId)
-      .in("submission_id",batch).not("released_at","is",null).order("id").range(from,to));
+      .in("submission_id",batch).lte("released_at",new Date().toISOString()).order("id").range(from,to));
   if(evaluationResult.error||evaluationResult.truncated) throw new Error("Outcome evaluations were incomplete.");
 
   const assignmentScores=releasedAssignmentMarks(subsResult.data,evaluationResult.data);
