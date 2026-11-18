@@ -148,6 +148,7 @@ export const collegeAISettingsSchema = z.object({
 });
 
 export const aiStudyAssistantSchema = z.object({
+  mode: z.enum(["chat", "practice", "revision"]).default("chat"),
   question: z.string().trim().min(1).max(4000),
   history: z.array(z.object({
     role: z.enum(["user", "assistant"]),

@@ -5,7 +5,7 @@ import { AIStudyAssistant } from "@/components/ai-study-assistant";
 export default async function AIStudyPage() {
   await requireRole(["student"]);
   return <>
-    <PageHeader title="AI study assistant" description="A private study space for your own workload and college learning materials."/>
+    <PageHeader title="Campus AI Study Copilot" description="Ask grounded questions, practise concepts and build personalized revision plans with referenced course material."/>
     <AIStudyAssistant/>
   </>;
 }
