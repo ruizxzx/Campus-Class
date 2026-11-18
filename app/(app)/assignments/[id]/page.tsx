@@ -88,7 +88,7 @@ export default async function StudentAssignmentDetailPage({ params }: { params: 
     {latestSubmission && <div className="mt-5">
       <StudentSubmissionEditor
         submission={{ ...latestSubmission, attachments: latestSubmissionFiles }}
-        isGraded={latestSubmissionIsGraded}
+        isGraded={latestSubmissionIsGraded || (isLate && !assignment.allow_late)}
       />
     </div>}
     <div className="mt-5">{isLate && !assignment.allow_late

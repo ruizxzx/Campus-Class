@@ -17,7 +17,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const admin = createAdminClient();
   const { data: submission, error: submissionError } = await admin
     .from("assignment_submissions")
-    .select("id,assignment_id,college_id,student_id")
+    .select("id,assignment_id,college_id,student_id,version")
     .eq("id", id)
     .eq("college_id", context.profile.college_id)
     .eq("student_id", context.userId)
@@ -30,7 +30,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { data: assignment, error: assignmentError } = await admin
     .from("assignments")
-    .select("id,status")
+    .select("id,status,class_id,due_at,allow_late")
     .eq("id", submission.assignment_id)
     .eq("college_id", submission.college_id)
     .maybeSingle();
@@ -39,6 +39,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Could not check the assignment." }, { status: 500 });
   }
   if (!assignment || assignment.status !== "published") return NextResponse.json({ error: "This assignment is no longer available." }, { status: 404 });
+  const { data: enrollment, error: enrollmentError } = await admin.from("class_enrollments")
+    .select("id").eq("college_id", submission.college_id)
+    .eq("class_id", assignment.class_id).eq("student_id", context.userId)
+    .eq("status", "active").maybeSingle();
+  if (enrollmentError) return NextResponse.json({ error: "Could not check your class enrollment." }, { status: 500 });
+  if (!enrollment) return NextResponse.json({ error: "You are no longer enrolled in this class." }, { status: 403 });
+  if (assignment.due_at && Date.now() > new Date(assignment.due_at).getTime() && !assignment.allow_late) {
+    return NextResponse.json({ error: "This assignment's deadline has passed; edits are closed." }, { status: 409 });
+  }
+  const { data: newer, error: newerError } = await admin.from("assignment_submissions")
+    .select("id").eq("college_id", submission.college_id)
+    .eq("assignment_id", submission.assignment_id).eq("student_id", context.userId)
+    .gt("version", submission.version).limit(1);
+  if (newerError) return NextResponse.json({ error: "Could not check submission history." }, { status: 500 });
+  if (newer?.length) return NextResponse.json({ error: "Only your latest submission can be edited." }, { status: 409 });
 
   const { data: evaluation, error: evaluationError } = await admin
     .from("assignment_evaluations")

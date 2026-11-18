@@ -22,19 +22,37 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
     if (!access?.can_manage_assignments) return NextResponse.json({ error: "You do not have assignment management permission for this class." }, { status: 403 });
   }
-  const { data: roster, error: rosterError } = await admin.from("class_enrollments").select("student_id").eq("college_id", assignment.college_id).eq("class_id", assignment.class_id).eq("status", "active");
-  if (rosterError) {
-    console.error("Assignment notification roster lookup failed", { code: rosterError.code, message: rosterError.message });
-    return NextResponse.json({ error: "Could not read the class roster for notifications." }, { status: 500 });
-  }
+  // The default PostgREST limit is commonly 1,000 rows. Process the full
+  // active roster in bounded batches and make retries safe via reference_key.
   let notified = 0;
-  if (roster?.length) {
-    const { data, error } = await admin.from("notifications").upsert(roster.map((item) => ({ college_id: assignment.college_id, user_id: item.student_id, type: "assignment.published", title: "New assignment", body: assignment.title, href: `/assignments/${assignment.id}`, reference_key: `assignment-published:${assignment.id}:${item.student_id}` })), { onConflict: "user_id,reference_key", ignoreDuplicates: true }).select("id");
+  let offset = 0;
+  const batchSize = 200;
+  while (true) {
+    const { data: roster, error: rosterError } = await admin.from("class_enrollments")
+      .select("student_id")
+      .eq("college_id", assignment.college_id)
+      .eq("class_id", assignment.class_id)
+      .eq("status", "active")
+      .order("student_id", { ascending: true })
+      .range(offset, offset + batchSize - 1);
+    if (rosterError) {
+      console.error("Assignment notification roster lookup failed", { code: rosterError.code, message: rosterError.message });
+      return NextResponse.json({ error: "Could not read the class roster for notifications. Retry from the assignment page.", retryable: true, notified }, { status: 500 });
+    }
+    if (!roster?.length) break;
+    const { data, error } = await admin.from("notifications").upsert(roster.map((item) => ({
+      college_id: assignment.college_id, user_id: item.student_id,
+      type: "assignment.published", title: "New assignment", body: assignment.title,
+      href: `/assignments/${assignment.id}`,
+      reference_key: `assignment-published:${assignment.id}:${item.student_id}`,
+    })), { onConflict: "user_id,reference_key", ignoreDuplicates: true }).select("id");
     if (error) {
       console.error("Assignment notification creation failed", { code: error.code, message: error.message });
-      return NextResponse.json({ error: "Assignment published, but notifications could not be sent." }, { status: 500 });
+      return NextResponse.json({ error: "Assignment is published, but in-app notifications could not be saved. Apply migration 038 and retry.", retryable: true, notified }, { status: 500 });
     }
-    notified = data?.length ?? 0;
+    notified += data?.length ?? 0;
+    offset += roster.length;
+    if (roster.length < batchSize) break;
   }
   return NextResponse.json({ success: true, notified });
 }

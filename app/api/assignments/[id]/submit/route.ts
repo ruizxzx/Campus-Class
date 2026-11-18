@@ -14,16 +14,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid submission." }, { status: 400 });
 
   const admin = createAdminClient();
-  const { data: assignment } = await admin.from("assignments").select("id,college_id,class_id,title,status,due_at,allow_late,allow_resubmission").eq("id", assignmentId).eq("college_id", context.profile.college_id).maybeSingle();
+  const { data: assignment, error: assignmentError } = await admin.from("assignments").select("id,college_id,class_id,title,status,due_at,allow_late,allow_resubmission").eq("id", assignmentId).eq("college_id", context.profile.college_id).maybeSingle();
+  if (assignmentError) {
+    console.error("Assignment submission lookup failed", { code: assignmentError.code, message: assignmentError.message });
+    return NextResponse.json({ error: "Could not check the assignment. Verify the required Supabase migrations." }, { status: 500 });
+  }
   if (!assignment || assignment.status !== "published") return NextResponse.json({ error: "This assignment is not available for submission." }, { status: 404 });
-  const { data: enrollment } = await admin.from("class_enrollments").select("id,status").eq("college_id", assignment.college_id).eq("class_id", assignment.class_id).eq("student_id", context.userId).eq("status", "active").maybeSingle();
+  const { data: enrollment, error: enrollmentError } = await admin.from("class_enrollments").select("id,status").eq("college_id", assignment.college_id).eq("class_id", assignment.class_id).eq("student_id", context.userId).eq("status", "active").maybeSingle();
+  if (enrollmentError) return NextResponse.json({ error: "Could not verify your class enrollment." }, { status: 500 });
   if (!enrollment) return NextResponse.json({ error: "You are not enrolled in this class." }, { status: 403 });
 
   const now = new Date();
   const isLate = Boolean(assignment.due_at && now.getTime() > new Date(assignment.due_at).getTime());
   if (isLate && !assignment.allow_late) return NextResponse.json({ error: "The deadline has passed and late submissions are disabled." }, { status: 409 });
 
-  const { data: previous } = await admin.from("assignment_submissions").select("id,version").eq("assignment_id", assignmentId).eq("student_id", context.userId).order("version", { ascending: false });
+  const { data: previous, error: previousError } = await admin.from("assignment_submissions").select("id,version").eq("college_id", assignment.college_id).eq("assignment_id", assignmentId).eq("student_id", context.userId).order("version", { ascending: false });
+  if (previousError) return NextResponse.json({ error: "Could not check your submission history." }, { status: 500 });
   if ((previous?.length ?? 0) > 0 && !assignment.allow_resubmission) return NextResponse.json({ error: "Resubmission is disabled for this assignment." }, { status: 409 });
 
   const storagePrefix = `${assignment.college_id}/${assignment.class_id}/${assignmentId}/${context.userId}/`;
@@ -51,6 +57,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }).select("id").single();
   if (submissionError || !submission) {
     if (submissionError) console.error("Assignment submission creation failed", { code: submissionError.code, message: submissionError.message });
+    if (submissionError?.code === "23505") return NextResponse.json({ error: "A submission was just saved. Refresh before submitting again." }, { status: 409 });
     return NextResponse.json({ error: "Could not save your submission." }, { status: 500 });
   }
 

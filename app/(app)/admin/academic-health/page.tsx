@@ -39,6 +39,7 @@ const migrations=[
   ["035","202611180035_student_success_rules.sql"],
   ["036","202611190036_syllabus_pgvector_index.sql"],
   ["037","202611190037_academic_service_read_grants.sql"],
+  ["038","202611190038_notifications_and_stream_service_grants.sql"],
 ];
 export default async function AcademicHealthPage(){
   await requireRole(["admin"]);
@@ -71,6 +72,7 @@ export default async function AcademicHealthPage(){
       <section className="surface p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><Database size={17}/>Database readiness</h2>
         <p className="mt-2 text-xs text-[var(--muted)]">A 42501 permission error on classes, subjects, quizzes or quiz attempts may indicate missing service-role SELECT grants. Apply <a className="underline" target="_blank" rel="noopener noreferrer" href="https://github.com/ruizxzx/Campus-Class/blob/main/supabase/migrations/202611190037_academic_service_read_grants.sql">SQL 037</a> in the correct Supabase project, then reload. If permissions remain denied, verify the production service-role key belongs to that same project.</p>
+        <p className="mt-2 text-xs text-[var(--muted)]">Assignment and announcement notification failures, or faculty stream posting errors, may require <a className="underline" target="_blank" rel="noopener noreferrer" href="https://github.com/ruizxzx/Campus-Class/blob/main/supabase/migrations/202611190038_notifications_and_stream_service_grants.sql">SQL 038</a>. This is a separate forward-only patch from SQL 037.</p>
         <div className="mt-3 table-wrap"><table className="table-base min-w-[560px]"><thead>
           <tr><th>Requirement</th><th>Migration</th><th>Result</th></tr></thead><tbody>
           {statuses.map((check)=><tr key={check.label}>
