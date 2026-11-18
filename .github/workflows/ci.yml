@@ -28,6 +28,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run security and feature regression tests
         run: pnpm run test:security
+      - name: Run independent unit suite
+        run: pnpm run test:unit
       - name: Type check
         run: pnpm run typecheck
       - name: Lint
