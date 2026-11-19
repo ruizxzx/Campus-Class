@@ -29,7 +29,7 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
   const [visibility, setVisibility] = useState<"class" | "selected_students">("class");
   const [studentIds, setStudentIds] = useState<string[]>([]);
   const [pinned, setPinned] = useState(false);
-  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [course, setCourse] = useState({ subjectId: "", title: "", description: "" });
   const [chapters, setChapters] = useState<CourseChapterDraft[]>([
     {
@@ -41,35 +41,51 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
 
   async function saveStream(event: React.FormEvent) {
     event.preventDefault();
-    setBusy(true);
-    const form = new FormData();
-    form.set("class_id", stream.classId);
-    form.set("title", stream.title);
-    form.set("body", stream.body);
-    form.set("post_type", stream.type);
-    form.set("visibility", visibility);
-    form.set("student_ids", JSON.stringify(studentIds));
-    form.set("pinned", String(pinned));
-    if (attachment) form.set("attachment", attachment);
-    try {
-      const response = await fetch("/api/stream/posts", { method: "POST", body: form });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) {
-        toast.error(result.error ?? "Could not publish the class post.");
-        return;
-      }
-      toast.success("Stream post published.");
-      setStream({ classId: "", title: "", body: "", type: "announcement" });
-      setVisibility("class");
-      setStudentIds([]);
-      setPinned(false);
-      setAttachment(null);
-      router.refresh();
-    } catch {
-      toast.error("Could not reach the class stream service.");
-    } finally {
-      setBusy(false);
+    if (attachments.length>10 || attachments.some(file=>!file.size||file.size>30*1024*1024)) {
+      toast.error("Choose up to 10 files, 30 MB each.");
+      return;
     }
+    setBusy(true);
+    let draftId:string|null=null;
+    try {
+      const response=await fetch("/api/stream/batch",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          action:"begin",
+          post:{class_id:stream.classId,title:stream.title,body:stream.body,
+            post_type:stream.type,visibility,student_ids:studentIds,pinned},
+          files:attachments.map(file=>({name:file.name,type:file.type,size:file.size})),
+        }),
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error??"Could not prepare the class post.");
+      if(!result.post_id || result.files?.length!==attachments.length)throw new Error("Upload preparation was incomplete.");
+      draftId=result.post_id as string;
+      const db=createClient();
+      for(let index=0;index<attachments.length;index++){
+        const token=result.files[index];
+        const {error:uploadError}=await db.storage.from("class-stream")
+          .uploadToSignedUrl(token.path,token.token,attachments[index],{
+            contentType:attachments[index].type,upsert:false,
+          });
+        if(uploadError)throw new Error("Could not upload "+attachments[index].name+". "+uploadError.message);
+      }
+      const finish=await fetch("/api/stream/batch",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"finish",post_id:draftId}),
+      });
+      const finishBody=await finish.json().catch(()=>({}));
+      if(!finish.ok)throw new Error(finishBody.error??"Could not publish all attachments.");
+      draftId=null;
+      toast.success(attachments.length?"Class post and all resources published.":"Class post published.");
+      setStream({classId:"",title:"",body:"",type:"announcement"});
+      setVisibility("class");setStudentIds([]);setPinned(false);setAttachments([]);
+      router.refresh();
+    } catch(error) {
+      // A draft is never visible to students. Preserve it for diagnosis, but
+      // do not claim that a partially uploaded resource was published.
+      toast.error(error instanceof Error?error.message:"Could not publish class resources.");
+    } finally {setBusy(false);}
   }
 
   function moveChapter(index: number, direction: -1 | 1) {
@@ -266,10 +282,10 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
               <label className="block text-xs font-semibold">Attach a resource
                 <span className="relative mt-2 flex min-h-11 items-center gap-2 overflow-hidden rounded-xl border border-dashed border-[var(--line)] px-3 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-2)] focus-within:ring-2 focus-within:ring-[var(--green)]">
                   <FileUp size={15} className="shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{attachment?.name ?? "Choose a file"}</span>
-                  <input className="absolute inset-0 cursor-pointer opacity-0" type="file" aria-label="Choose a class resource file" accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.pptx" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} />
+                  <span className="min-w-0 flex-1 truncate">{attachments.length ? attachments.length+" file(s) selected" : "Choose multiple files"}</span>
+                  <input className="absolute inset-0 cursor-pointer opacity-0" type="file" multiple aria-label="Choose class resource files" accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.pptx" onChange={(event) => setAttachments(Array.from(event.target.files??[]))} />
                 </span>
-                <span className="mt-1 block text-[10px] font-normal text-[var(--muted)]">PDF, image, DOCX or PPTX · up to 30 MB</span>
+                <span className="mt-1 block text-[10px] font-normal text-[var(--muted)]">Up to 10 PDF, image, DOCX or PPTX files · 30 MB each</span>
               </label>
             </div>
             {visibility === "selected_students" ? (

@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ArrowUpRight, BookOpen, ClipboardCheck, RadioTower } from "lucide-react";
+import { ArrowUpRight, BookOpen, ClipboardCheck, RadioTower, LibraryBig } from "lucide-react";
 
 const sections = [
   { id: "stream", label: "Class stream", href: "/stream", icon: RadioTower, actionHref: "/faculty/learning?tab=stream", actionLabel: "Create a post" },
   { id: "courses", label: "Courses", href: "/courses", icon: BookOpen, actionHref: "/faculty/learning?tab=course", actionLabel: "Create learning content" },
+  { id: "library", label: "Digital library", href: "/library", icon: LibraryBig, actionHref: "/library", actionLabel: "Upload study resources" },
   { id: "assessments", label: "Quizzes & exams", href: "/quizzes", icon: ClipboardCheck, actionHref: "/faculty/learning?tab=quiz", actionLabel: "Create an assessment" },
 ] as const;
 

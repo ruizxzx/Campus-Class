@@ -25,6 +25,11 @@ const checks:{label:string;table:string;columns:string;migration:string}[]=[
   {label:"Class gradebook policies",table:"class_gradebook_policies",columns:"college_id",migration:"034"},
   {label:"Student Success rules",table:"student_success_rules",columns:"college_id",migration:"035"},
   {label:"Syllabus PDF vector index",table:"syllabus_text_chunks",columns:"college_id",migration:"036"},
+  {label:"Lesson completion tracking",table:"lesson_progress",columns:"lesson_id,student_id",migration:"040"},
+  {label:"College certificates",table:"academic_certificates",columns:"certificate_number",migration:"040"},
+  {label:"Digital library",table:"study_materials",columns:"id,class_id",migration:"041"},
+  {label:"Library file version history",table:"study_material_versions",columns:"id,version",migration:"041"},
+  {label:"Library full-text search",table:"study_material_chunks",columns:"chunk_text",migration:"042"},
 ];
 const migrations=[
   ["026","202611180026_campusclass_20_academic_intelligence.sql"],
@@ -41,6 +46,9 @@ const migrations=[
   ["037","202611190037_academic_service_read_grants.sql"],
   ["038","202611190038_notifications_and_stream_service_grants.sql"],
   ["039","202611190039_enrollment_and_submission_integrity.sql"],
+  ["040","202611190040_lesson_progress_certificates.sql"],
+  ["041","202611190041_study_materials_library.sql"],
+  ["042","202611190042_study_material_text_indexing.sql"],
 ];
 export default async function AcademicHealthPage(){
   await requireRole(["admin"]);

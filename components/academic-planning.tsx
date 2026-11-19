@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { CalendarPlus, Download, Trash2, UploadCloud, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -19,43 +19,55 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
   const [classId, setClassId] = useState("");
   const [title, setTitle] = useState("");
   const [outline, setOutline] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const pending = useRef<{files:File[];items:{id:string;path:string;token:string;name:string;size:number;title:string;outline:string}[];done:Set<number>}|null>(null);
   const [saving, setSaving] = useState(false);
   const [indexingId, setIndexingId] = useState<string | null>(null);
   const [useOcr, setUseOcr] = useState(false);
 
   async function upload(event: React.FormEvent) {
     event.preventDefault();
-    if (!file) return;
-    setSaving(true);
-    const form = new FormData();
-    form.set("class_id", classId);
-    form.set("title", title);
-    form.set("outline_text", outline);
-    form.set("file", file);
-    try {
-      const response = await fetch("/api/syllabi", { method: "POST", body: form });
-      const raw = await response.text();
-      let result: { error?: string } = {};
-      if (raw) {
-        try {
-          result = JSON.parse(raw) as typeof result;
-        } catch {
-          throw new Error("The server returned an unreadable upload response.");
-        }
-      }
-      if (!response.ok) throw new Error(result.error ?? "Could not upload the syllabus.");
-      toast.success("Syllabus uploaded.");
-      setClassId("");
-      setTitle("");
-      setOutline("");
-      setFile(null);
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not upload the syllabus.");
-    } finally {
-      setSaving(false);
+    if (!files.length) return;
+    if(files.length>10||files.some(file=>!file.name.toLowerCase().endsWith(".pdf")||file.size<=0||file.size>20*1024*1024)){
+      toast.error("Choose up to 10 valid PDF files of 20 MB each.");return;
     }
+    setSaving(true);
+    try{
+      let current=pending.current;
+      if(!current){
+        const response=await fetch("/api/syllabi/batch",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({action:"prepare",class_id:classId,title,outline,
+            files:files.map(f=>({name:f.name,size:f.size}))}),
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error??"Could not prepare syllabus uploads.");
+        if(data.items?.length!==files.length)throw new Error("Syllabus upload preparation failed.");
+        current={files:[...files],items:data.items,done:new Set<number>()};
+        pending.current=current;
+      }
+      const db=createClient();
+      for(let i=0;i<current.files.length;i++){
+        if(current.done.has(i))continue;
+        const entry=current.items[i];
+        const {error}=await db.storage.from("class-syllabi")
+          .uploadToSignedUrl(entry.path,entry.token,current.files[i],{
+            contentType:"application/pdf",upsert:false});
+        if(error)throw new Error("Could not upload "+entry.name+": "+error.message);
+        current.done.add(i);
+      }
+      const finish=await fetch("/api/syllabi/batch",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"publish",class_id:classId,
+          items:current.items.map(({id,path,name,size,title,outline})=>({id,path,name,size,title,outline}))}),
+      });
+      const data=await finish.json().catch(()=>({}));
+      if(!finish.ok)throw new Error(data.error??"Could not publish the uploaded PDFs. Retry finalization.");
+      pending.current=null;setFiles([]);setClassId("");setTitle("");setOutline("");
+      toast.success(data.count+" syllabus PDF(s) published.");
+      router.refresh();
+    }catch(error){toast.error(error instanceof Error?error.message:"Syllabus upload failed; retry.");}
+    finally{setSaving(false);}
   }
 
   async function indexPdf(id:string){
@@ -93,8 +105,8 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
       <label className="block text-xs font-semibold">Class<select className="input-base mt-2" required value={classId} onChange={(event) => setClassId(event.target.value)}><option value="">Choose a class</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.display_name || "Class"} · Section {item.section}</option>)}</select></label>
       <label className="block text-xs font-semibold">Syllabus title<input className="input-base mt-2" required minLength={2} maxLength={180} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Course syllabus"/></label>
       <label className="block text-xs font-semibold">Outline text<textarea className="input-base mt-2 min-h-28 resize-y" maxLength={50000} value={outline} onChange={(event) => setOutline(event.target.value)} placeholder="Paste a searchable outline for students and AI study help."/></label>
-      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[var(--line)] p-4 text-xs hover:border-[var(--green)]"><UploadCloud size={17} className="text-[var(--green)]"/><span className="min-w-0 break-all">{file?.name ?? "Choose PDF · up to 20 MB"}</span><input className="hidden" type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)}/></label>
-      <button className="btn-primary w-full" disabled={saving || !classId || !title.trim() || !file}>{saving ? "Uploading…" : "Upload syllabus"}<UploadCloud size={14}/></button>
+      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[var(--line)] p-4 text-xs hover:border-[var(--green)]"><UploadCloud size={17} className="text-[var(--green)]"/><span className="min-w-0 break-all">{files.length?files.length+" PDFs selected":"Choose up to 10 PDFs · 20 MB each"}</span><input className="hidden" type="file" multiple disabled={saving||Boolean(pending.current)} accept="application/pdf,.pdf" onChange={(event) => setFiles(Array.from(event.target.files??[]))}/></label>
+      <button className="btn-primary w-full" disabled={saving || !classId || !title.trim() || !files.length}>{saving ? "Uploading…" : pending.current ? "Retry / finish uploads" : "Upload syllabus PDFs"}<UploadCloud size={14}/></button>
     </form> : null}
     <section className="surface min-w-0 p-4 sm:p-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">

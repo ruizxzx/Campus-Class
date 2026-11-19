@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/components/ui";
@@ -98,6 +99,7 @@ export default async function CourseDetail({ params }: { params: Promise<{ cours
           </div>
         </div>
       </section>
+      {profile.role === "student" ? <div className="mb-4 flex gap-2"><Link className="btn-secondary" href="/certificates">My course certificates</Link><Link className="btn-secondary" href="/library">Study materials library</Link></div> : <div className="mb-4 flex gap-2"><Link className="btn-secondary" href={"/faculty/progress?course="+courseId}>See student completion report</Link><Link className="btn-secondary" href="/library">Upload course materials</Link></div>}
       <CourseLearningViewer
         modules={visibleModules}
         initialCompletedLessonIds={[...completed]}
