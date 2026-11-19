@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requestProfile, isResponse } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAuthorizedImport } from "@/lib/youtube-access";
+import { summarizeYoutubeSync } from "@/lib/youtube-sync";
 export const runtime="nodejs";
 export async function GET(request:Request,{params}:{params:Promise<{id:string}>}){
  const actor=await requestProfile();if(isResponse(actor))return actor;
@@ -37,6 +38,19 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string}>}
    }
  }
  const map=new Map(existing.map(x=>[x.video_id,x]));
+ let syncChanges:{missing:number;added:number;reordered:number}|null=null;
+ if(job.mode==="sync"&&job.status==="review"&&page===0){
+   const fresh:{video_id:string|null;playlist_position:number}[]=[];
+   for(let start=0;;start+=200){
+     const {data,error:syncError}=await db.from("youtube_import_items")
+       .select("video_id,playlist_position").eq("college_id",actor.profile.college_id)
+       .eq("job_id",id).order("playlist_position").range(start,start+199);
+     if(syncError)return NextResponse.json({error:"Could not compare the complete playlist snapshot."},{status:503});
+     fresh.push(...(data??[]));
+     if((data?.length??0)<200)break;
+   }
+   syncChanges=summarizeYoutubeSync(existing,fresh);
+ }
  return NextResponse.json({
    job:{id:job.id,playlist_id:job.playlist_id,title:job.playlist_title,description:job.playlist_description,
      thumbnail:job.playlist_thumbnail,total:job.expected_count,processed:job.processed_count,
@@ -45,9 +59,9 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string}>}
    videos:(videos??[]).map(v=>({...v,
      existing:!!(v.video_id&&map.has(v.video_id)),
      reordered:!!(v.video_id&&map.has(v.video_id)&&map.get(v.video_id)!.playlist_position!==v.playlist_position)})),
-   missingFromPlaylist:job.mode==="sync"&&job.status==="review"?existing.filter(old=>
-     !(videos??[]).some(v=>v.video_id===old.video_id)
-   ).length:null,
+   missingFromPlaylist:syncChanges?.missing??null,
+   newToPlaylist:syncChanges?.added??null,
+   reorderedInPlaylist:syncChanges?.reordered??null,
    page,has_more:(videos?.length??0)===100,
  });
 }

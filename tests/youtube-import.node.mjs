@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { summarizeYoutubeSync } from "../lib/youtube-sync.ts";
 import {
  parsePlaylistUrl,parseIsoDuration,fetchPlaylistMeta,fetchPlaylistPage,YouTubeApiError,
 } from "../lib/youtube-data.ts";
@@ -135,4 +136,31 @@ test("course wizard preserves manual authoring and import alternatives",()=>{
  const wizard=read("components/youtube-import-wizard.tsx");
  for(const token of ["Select all new videos","Deselect all","Suggest chapters with AI",
   "Publish complete course","Create course draft","Retry","Sync"])assert.match(wizard,new RegExp(token,"i"));
+});
+
+test("playlist sync compares the entire imported snapshot, not only page one",()=>{
+ const existing=[{video_id:"A",playlist_position:0},{video_id:"B",playlist_position:120},
+   {video_id:"REMOVED",playlist_position:150}];
+ const snapshot=Array.from({length:151},(_,i)=>({
+   video_id:i===0?"A":i===120?"B":"NEW-"+i,playlist_position:i+1,
+ }));
+ assert.deepEqual(summarizeYoutubeSync(existing,snapshot),{
+   missing:1,added:149,reordered:2,
+ });
+ // Duplicate appearances of a video ID never inflate additions.
+ assert.deepEqual(summarizeYoutubeSync([],[
+   {video_id:"A",playlist_position:0},{video_id:"A",playlist_position:1},
+   {video_id:null,playlist_position:2},
+ ]),{missing:0,added:1,reordered:0});
+});
+test("failed playlist jobs are explicitly retried and completion notification is idempotent",()=>{
+ const wizard=read("components/youtube-import-wizard.tsx");
+ const player=read("components/youtube-tracked-player.tsx");
+ const api=read("app/api/youtube/imports/[id]/route.ts");
+ const worker=read("lib/youtube-worker.ts");
+ assert.match(wizard,/status==="failed"\|\|status==="cancelled"\?"retry":"process"/);
+ assert.match(player,/completedNotified=true/);
+ assert.match(player,/completedNotified=Boolean\(result.completed\)/);
+ assert.match(api,/summarizeYoutubeSync\(existing,fresh\)/);
+ assert.match(worker,/course\?\.status!=="active"/);
 });

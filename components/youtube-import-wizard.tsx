@@ -18,7 +18,8 @@ type Group={id:string;title:string;ids:string[]};
 type Detail={job:{id:string;status:string;title:string|null;description:string|null;total:number;
  processed:number;thumbnail:string|null;failure:string|null;mode:string;next_page:boolean;
  target_course_id:string|null};
- videos:Video[];page:number;has_more:boolean};
+ videos:Video[];page:number;has_more:boolean;
+ missingFromPlaylist:number|null;newToPlaylist:number|null;reorderedInPlaylist:number|null};
 const input="input-base w-full mt-2";
 async function jsonFetch(url:string,opts?:RequestInit):Promise<Record<string,unknown>>{
  const response=await fetch(url,opts);
@@ -113,16 +114,16 @@ export function YoutubeImportWizard({subjects}:{subjects:Subject[]}){
    }
    setDetails(current=>({...current,[id]:detail}));
    setAllVideos(current=>({...current,[id]:full}));
-   setGroups(current=>({...current,[id]:makeGroups(full,"sequential",detail.job.title??"Lectures")}));
+   setGroups(current=>({...current,[id]:makeGroups(full,groupMode==="rule"?"rule":"sequential",detail.job.title??"Lectures")}));
    setJobs(current=>current.map(j=>j.id===id?{
      ...j,status:detail.job.status,playlist_title:detail.job.title,
      processed_count:detail.job.processed,expected_count:detail.job.total,
    }:j));
    if(more)toast.warning("This playlist has more than 1,200 videos. Import it in smaller sections; the job retains all fetched videos.");
  }
- async function processUntilReview(id:string){
+ async function processUntilReview(id:string,firstAction:"process"|"retry"="process"){
    for(let iteration=0;iteration<120;iteration++){
-     const data=await post("/api/youtube/imports/"+id+"/process",{action:"process"});
+     const data=await post("/api/youtube/imports/"+id+"/process",{action:iteration===0?firstAction:"process"});
      const status=String(data.status??"");
      const count=Number(data.processed??0);
      setProgress("Fetching YouTube videos · "+count+" processed");
@@ -161,7 +162,11 @@ export function YoutubeImportWizard({subjects}:{subjects:Subject[]}){
  }
  async function continueJob(id:string){
    setBusy(true);
-   try{await processUntilReview(id);setSelectedJob(id);toast.success("Playlist ready for review.");}
+   try{
+     const status=jobs.find(j=>j.id===id)?.status;
+     await processUntilReview(id,status==="failed"||status==="cancelled"?"retry":"process");
+     setSelectedJob(id);toast.success("Playlist ready for review.");
+   }
    catch(error){toast.error(error instanceof Error?error.message:"Import still pending.");}
    finally{setBusy(false);setProgress("");}
  }
@@ -356,7 +361,7 @@ export function YoutubeImportWizard({subjects}:{subjects:Subject[]}){
        {j.playlist_title||j.playlist_id.slice(0,18)} · {j.status}
      </button>)}</div>
      {selectedJob&&jobs.find(j=>j.id===selectedJob)?.status!=="applied"?<div className="flex flex-wrap gap-2">
-       <button type="button" className="btn-secondary" disabled={busy} onClick={()=>void continueJob(selectedJob)}>
+       <button type="button" className="btn-secondary" disabled={busy||jobs.find(j=>j.id===selectedJob)?.status==="review"} onClick={()=>void continueJob(selectedJob)}>
          <RefreshCw size={14}/>Continue / retry fetch</button>
        <button type="button" className="btn-secondary" disabled={busy}
          onClick={()=>void post("/api/youtube/imports/"+selectedJob+"/process",{action:"cancel"})
@@ -370,6 +375,11 @@ export function YoutubeImportWizard({subjects}:{subjects:Subject[]}){
        <div><h3 className="font-semibold">{current.job.title||"YouTube playlist"}</h3>
          <p className="text-xs text-[var(--muted)]">{current.job.processed} of {current.job.total} video entries fetched · {selectedCount} selected</p></div>
      </div>
+     {current.job.mode==="sync"&&current.missingFromPlaylist!==null?
+       <p className="text-xs text-[var(--muted)]" role="status">
+         Playlist changes: {current.newToPlaylist??0} new, {current.reorderedInPlaylist??0} reordered,
+         {current.missingFromPlaylist} missing from the refreshed playlist. Existing lessons and certificates remain intact.
+       </p>:null}
      <div className="flex flex-wrap gap-2">
        <button type="button" className="btn-secondary" onClick={()=>setAllVideos(prev=>({...prev,[selectedJob]:videos.map(v=>({
          ...v,selected:v.availability==="available"&&!v.existing,

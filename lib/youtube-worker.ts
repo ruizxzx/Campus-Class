@@ -13,6 +13,11 @@ async function applyExplicitlyEnabledNewVideos(job:Job){
    .eq("college_id",job.college_id).eq("course_id",job.target_course_id)
    .eq("playlist_id",job.playlist_id).maybeSingle();
  if(sourceError||!source?.automatic_additions||!source.sync_enabled)return false;
+ // Automatic sync must never publish an intentionally archived course.
+ const {data:course,error:courseError}=await db.from("courses").select("status")
+   .eq("college_id",job.college_id).eq("id",job.target_course_id).maybeSingle();
+ if(courseError)throw new Error("Could not verify the course publication status.");
+ if(course?.status!=="active")return false;
  const oldIds=new Set<string>();
  for(let start=0;;start+=200){
    const {data,error}=await db.from("youtube_lesson_sources").select("video_id")

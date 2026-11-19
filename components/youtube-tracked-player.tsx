@@ -58,7 +58,7 @@ export function YoutubeTrackedPlayer({lessonId,videoId,enabled,initialPercent=0,
  const [retry,setRetry]=useState(0);
  useEffect(()=>{completeRef.current=onComplete;},[onComplete]);
  useEffect(()=>{
-   let cancelled=false,interval:number|undefined;
+   let cancelled=false,interval:number|undefined,completedNotified=false;
    async function ping(){
      const target=player.current;
      if(cancelled||!target||!session.current||updating.current)return;
@@ -78,7 +78,8 @@ export function YoutubeTrackedPlayer({lessonId,videoId,enabled,initialPercent=0,
        if(cancelled)return;
        setPercent(Number(info.percent??0));setWatched(Number(info.watched_seconds??0));
        setDuration(Number(info.duration_seconds??0));
-       if(info.completed&&!done){
+       if(info.completed&&!completedNotified){
+         completedNotified=true;
          setDone(true);
          completeRef.current?.();
          toast.success("You completed this lecture and saved your progress.");
@@ -98,7 +99,8 @@ export function YoutubeTrackedPlayer({lessonId,videoId,enabled,initialPercent=0,
        if(cancelled)return;
        session.current=result.session_id??null;
        setPercent(Number(result.percent??0));setWatched(Number(result.watched_seconds??0));
-       setDuration(Number(result.duration_seconds??0));setDone(Boolean(result.completed));
+       setDuration(Number(result.duration_seconds??0));completedNotified=Boolean(result.completed);
+       setDone(completedNotified);
        await loadIframeApi();
        if(cancelled||!container.current)return;
        const factory=(window as YoutubeWindow).YT?.Player;
@@ -116,6 +118,7 @@ export function YoutubeTrackedPlayer({lessonId,videoId,enabled,initialPercent=0,
              if(data===0||data===2||data===1)void ping();
            },
            onError:()=>{
+             setStatus("error");
              setError("This video cannot be embedded. Open it on YouTube or ask faculty to replace the link.");
            },
          },
