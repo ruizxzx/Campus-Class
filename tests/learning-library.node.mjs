@@ -85,3 +85,18 @@ test("syllabus uploads use signed multi-PDF private storage",()=>{
  assert.match(route,/createSignedUploadUrl/);
  assert.match(route,/class_syllabi/);
 });
+
+test("library search never displays snippets from superseded file versions",()=>{
+ const page=read("app/(app)/library/page.tsx");
+ assert.match(page,/study_material_versions/);
+ assert.match(page,/currentVersions/);
+ assert.match(page,/\.in\("version_id",currentVersions\.slice/);
+ assert.doesNotMatch(page,/\.in\("material_id",ids\.slice\(start,start\+75\)\)\s*\.textSearch/);
+});
+test("faculty can inspect which students finished each lecture, not just totals",()=>{
+ const page=read("app/(app)/faculty/progress/page.tsx");
+ assert.match(page,/completedByStudent/);
+ assert.match(page,/completedLessonIds/);
+ assert.match(page,/Lecture \{i\+1\}/);
+ assert.match(page,/p\.completedLessonIds\.includes\(lesson.id\)/);
+});

@@ -22,11 +22,11 @@ export default async function StudyLibraryPage({searchParams}:{
  const isStaff=profile.role!=="student";
  let items:{
   id:string;title:string;description:string;class_id:string;subject_id:string;
-  semester:number|null;unit_title:string;chapter_title:string;created_at:string;status:string;
+  semester:number|null;unit_title:string;chapter_title:string;created_at:string;status:string;current_version:number;
  }[]=[];
  if(classIds.length){
    let request=db.from("study_materials")
-     .select("id,title,description,class_id,subject_id,semester,unit_title,chapter_title,created_at,status")
+     .select("id,title,description,class_id,subject_id,semester,unit_title,chapter_title,created_at,status,current_version")
      .eq("college_id",profile.college_id).in("class_id",selected?[selected]:classIds)
      .order("created_at",{ascending:false}).limit(500);
    if(!isStaff)request=request.eq("status","published");
@@ -40,10 +40,21 @@ export default async function StudyLibraryPage({searchParams}:{
  const matchingText=new Map<string,{page:number|null;snippet:string}>();
  if(query&&items.length){
    const ids=items.map(item=>item.id);
+   // Search only the CURRENT published version. Historic versions may contain
+   // superseded or withdrawn content and must never leak through snippets.
+   const currentVersions:string[]=[];
+   const versionNumbers=new Map(items.map(item=>[item.id,item.current_version]));
    for(let start=0;start<ids.length;start+=75){
+     const {data,error}=await db.from("study_material_versions")
+       .select("id,material_id,version").eq("college_id",profile.college_id)
+       .in("material_id",ids.slice(start,start+75));
+     if(error)throw new Error("Could not verify current library versions.");
+     for(const v of data??[])if(versionNumbers.get(v.material_id)===v.version)currentVersions.push(v.id);
+   }
+   for(let start=0;start<currentVersions.length;start+=75){
      const {data,error}=await db.from("study_material_chunks")
        .select("material_id,page_number,chunk_text")
-       .eq("college_id",profile.college_id).in("material_id",ids.slice(start,start+75))
+       .eq("college_id",profile.college_id).in("version_id",currentVersions.slice(start,start+75))
        .textSearch("chunk_text",query,{type:"websearch",config:"english"})
        .limit(50);
      if(error)throw new Error("Could not search indexed book text. Apply SQL 042.");

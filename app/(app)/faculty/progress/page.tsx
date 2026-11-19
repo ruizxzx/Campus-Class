@@ -27,8 +27,9 @@ export default async function FacultyProgress({searchParams}:{
     :{data:[],error:null};
   if(courseError)throw new Error("Could not load accessible courses.");
   const selected=(courses??[]).find(c=>c.id===params.course)??courses?.[0];
-  type ReportRow={id:string;full_name:string;email:string;done:number;total:number};
+  type ReportRow={id:string;full_name:string;email:string;done:number;total:number;completedLessonIds:string[]};
   const rows:ReportRow[]=[];let total=0;
+  const lessons:{id:string;title:string}[]=[];
   if(selected) {
     const ids=allowed.filter(cls=>cls.subject_id===selected.subject_id).map(cls=>cls.id);
     const enrolled=new Set<string>();
@@ -44,9 +45,9 @@ export default async function FacultyProgress({searchParams}:{
       .select("id").eq("college_id",profile.college_id).eq("course_id",selected.id);
     if(moduleError)throw new Error("Could not load course chapters.");
     const moduleIds=(modules??[]).map(item=>item.id);
-    const lessons:string[]=[];
+
     if(moduleIds.length)for(let start=0;;start+=200){
-      const {data,error}=await db.from("course_lessons").select("id")
+      const {data,error}=await db.from("course_lessons").select("id,title")
         .eq("college_id",profile.college_id).eq("is_published",true)
         .in("module_id",moduleIds).order("id").range(start,start+199);
       if(error)throw new Error("Could not load published lessons.");
@@ -54,14 +55,16 @@ export default async function FacultyProgress({searchParams}:{
       if((data?.length??0)<200)break;
     }
     total=lessons.length;
-    const counts=new Map<string,number>();
+    const completedByStudent=new Map<string,Set<string>>();
     if(lessons.length)for(let start=0;;start+=200){
       const {data,error}=await db.from("lesson_progress").select("student_id,lesson_id")
-        .eq("college_id",profile.college_id).in("lesson_id",lessons)
+        .eq("college_id",profile.college_id).in("lesson_id",lessons.map(item=>item.id))
         .order("student_id").order("lesson_id").range(start,start+199);
       if(error)throw new Error("Could not load completion records. Apply SQL 040.");
-      for(const item of data??[])if(enrolled.has(item.student_id))
-        counts.set(item.student_id,(counts.get(item.student_id)??0)+1);
+      for(const item of data??[])if(enrolled.has(item.student_id)){
+        const done=completedByStudent.get(item.student_id)??new Set<string>();
+        done.add(item.lesson_id);completedByStudent.set(item.student_id,done);
+      }
       if((data?.length??0)<200)break;
     }
     const students=[...enrolled];
@@ -70,7 +73,10 @@ export default async function FacultyProgress({searchParams}:{
         .eq("college_id",profile.college_id).eq("role","student")
         .in("id",students.slice(start,start+150));
       if(error)throw new Error("Could not load student profiles.");
-      rows.push(...(data??[]).map(p=>({...p,done:counts.get(p.id)??0,total})));
+      rows.push(...(data??[]).map(p=>({
+        ...p,completedLessonIds:[...(completedByStudent.get(p.id)??new Set<string>())],
+        done:completedByStudent.get(p.id)?.size??0,total,
+      })));
     }
     rows.sort((a,b)=>a.full_name.localeCompare(b.full_name));
   }
@@ -86,7 +92,9 @@ export default async function FacultyProgress({searchParams}:{
       <div className="border-b border-[var(--line)] p-5"><h2 className="font-semibold">{selected.title}</h2>
         <p className="text-xs text-[var(--muted)] mt-2">{rows.length} enrolled students · {total} published lessons</p></div>
       <div className="overflow-x-auto"><table className="table-base min-w-[600px] w-full">
-        <thead><tr><th>Student</th><th>Completed</th><th>Progress</th><th>Status</th></tr></thead>
+        <thead><tr><th>Student</th><th>Completed</th><th>Progress</th><th>Status</th>
+          {lessons.map((lesson,i)=><th key={lesson.id} title={lesson.title} className="whitespace-nowrap">Lecture {i+1}</th>)}
+        </tr></thead>
         <tbody>{rows.map(p=><tr key={p.id}>
           <td><div className="font-semibold text-xs">{p.full_name}</div><div className="text-[10px] text-[var(--muted)]">{p.email}</div></td>
           <td>{p.done}/{p.total}</td>
@@ -94,6 +102,7 @@ export default async function FacultyProgress({searchParams}:{
             aria-valuemin={0} aria-valuemax={100} className="h-2 min-w-28 rounded-full bg-[var(--surface-2)] overflow-hidden">
             <div className="h-full bg-[var(--green-strong)]" style={{width:(total?Math.round(p.done/total*100):0)+"%"}}/></div></td>
           <td>{total&&p.done===total?"Completed":"In progress"}</td>
+          {lessons.map(lesson=><td key={lesson.id} title={lesson.title} className="text-center font-semibold">{p.completedLessonIds.includes(lesson.id)?"✓":"—"}</td>)}
         </tr>)}</tbody>
       </table></div>
       {!rows.length?<div className="p-5"><EmptyState title="No students enrolled" description="Assigned students will appear after joining their course's class."/></div>:null}

@@ -13,7 +13,7 @@ Run in the **correct Campus Class production Supabase SQL Editor** in this exact
 - `/faculty/learning?tab=stream` now uploads up to 10 PDF, DOCX, PPTX or image files (30 MB each) via direct signed Storage upload, then publishes the complete post.
 - `/syllabus` now uploads up to 10 PDFs (20 MB each) via direct signed Storage upload and indexed study assistance.
 - `/library`: create a collection of up to 10 materials per upload, choose class/semester/unit/chapter, replace documents, inspect download history, restore old versions, and index PDF/TXT text for search and AI.
-- `/faculty/progress`: view course completion totals and student-by-student progress for subjects taught in assigned classes (admins across college).
+- `/faculty/progress`: view course completion totals **and per-lecture completion marks per student** for subjects taught in assigned classes (admins across college).
 - AI indexing uses the college's configured OpenRouter model and may incur costs. Real PDF parser annotations are required; scanned PDFs may require the explicit paid OCR option. Overlength or unsupported document types fail closed rather than inventing extracted text.
 
 ## Student
@@ -37,3 +37,6 @@ Run in the **correct Campus Class production Supabase SQL Editor** in this exact
 - Upload batches require each signed token to remain valid. If a tab is abandoned, unpublished drafts and unreferenced objects can remain and may need authorized cleanup.
 - SQL migrations are operator-applied and do not execute automatically on GitHub push.
 - CI and anonymous browser smoke tests cannot prove authenticated production Supabase RLS or verify actual notifications/AI service keys.
+
+## Historical document safety
+The student library's full-text results include only the material's **current version**. Historic versions remain accessible to authorized faculty for audit/restore, but superseded file text cannot appear in student search snippets.
