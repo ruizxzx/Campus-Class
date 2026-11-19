@@ -37,7 +37,7 @@ export default async function StudyLibraryPage({searchParams}:{
    if(error)throw new Error("Could not load library materials. Apply SQL 041.");
    items=data??[];
  }
- let matchingText=new Map<string,{page:number|null;snippet:string}>();
+ const matchingText=new Map<string,{page:number|null;snippet:string}>();
  if(query&&items.length){
    const ids=items.map(item=>item.id);
    for(let start=0;start<ids.length;start+=75){

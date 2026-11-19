@@ -28,6 +28,7 @@ export function LibraryUploadForm({classes,replaceMaterialId}:{
  const [semester,setSemester]=useState("");
  const [busy,setBusy]=useState(false);
  const pending=useRef<Pending|null>(null);
+ const [hasPending,setHasPending]=useState(false);
  async function submit(event:React.FormEvent){
    event.preventDefault();
    if(busy)return;
@@ -53,6 +54,7 @@ export function LibraryUploadForm({classes,replaceMaterialId}:{
        if(data.items?.length!==files.length)throw new Error("Upload preparation is incomplete.");
        current={files:[...files],items:data.items,completed:new Set<number>()};
        pending.current=current;
+       setHasPending(true);
      }
      const db=createClient();
      for(let index=0;index<current.files.length;index++){
@@ -70,7 +72,7 @@ export function LibraryUploadForm({classes,replaceMaterialId}:{
        }))})});
      const data=await response.json().catch(()=>({}));
      if(!response.ok)throw new Error(data.error??"Files uploaded but not yet published. Retry to finalize.");
-     pending.current=null;setFiles([]);
+     pending.current=null;setHasPending(false);setFiles([]);
      toast.success(replaceMaterialId?"File version updated.":"All library files published.");
      router.refresh();
    }catch(error){
@@ -82,7 +84,7 @@ export function LibraryUploadForm({classes,replaceMaterialId}:{
    <p className="text-xs text-[var(--muted)]">Files are uploaded directly to private college Storage; students see them only after all uploads finish.</p>
    {!replaceMaterialId?<div className="grid gap-3 sm:grid-cols-2">
      <label className="text-xs font-semibold">Class
-       <select required className="input-base mt-1 w-full" value={classId} disabled={busy||!!pending.current}
+       <select required className="input-base mt-1 w-full" value={classId} disabled={busy||hasPending}
          onChange={e=>setClassId(e.target.value)}>{classes.map(c=><option key={c.id} value={c.id}>{c.display_name??"Class"} · {c.section}</option>)}</select>
      </label>
      <label className="text-xs font-semibold">Semester (optional)
@@ -108,13 +110,13 @@ export function LibraryUploadForm({classes,replaceMaterialId}:{
      <span className="mt-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-[var(--line)] p-4">
        <FileUp size={18}/><span>{files.length?files.map(f=>f.name).join(", "):"Choose "+(replaceMaterialId?"a replacement file":"up to 10 documents")}</span>
        <input className="sr-only" type="file" multiple={!replaceMaterialId}
-         disabled={busy||!!pending.current} accept=".pdf,.txt,.docx,.pptx,.jpg,.jpeg,.png,.webp"
+         disabled={busy||hasPending} accept=".pdf,.txt,.docx,.pptx,.jpg,.jpeg,.png,.webp"
          onChange={e=>setFiles(Array.from(e.target.files??[]))}/>
      </span>
    </label>
    <p className="text-[11px] text-[var(--muted)]">PDF, TXT, DOCX, PPTX, JPG, PNG, WebP · max 30 MB each</p>
    <button type="submit" className="btn-primary" disabled={busy||!files.length||(!replaceMaterialId&&!classId)}>
-     {busy?<><Loader2 size={15} className="animate-spin"/>Uploading…</>:pending.current?"Retry / finish upload":replaceMaterialId?"Replace file":"Publish files"}
+     {busy?<><Loader2 size={15} className="animate-spin"/>Uploading…</>:hasPending?"Retry / finish upload":replaceMaterialId?"Replace file":"Publish files"}
    </button>
  </form>;
 }

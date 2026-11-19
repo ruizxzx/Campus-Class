@@ -20,6 +20,7 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
   const [title, setTitle] = useState("");
   const [outline, setOutline] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [hasPending, setHasPending] = useState(false);
   const pending = useRef<{files:File[];items:{id:string;path:string;token:string;name:string;size:number;title:string;outline:string}[];done:Set<number>}|null>(null);
   const [saving, setSaving] = useState(false);
   const [indexingId, setIndexingId] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
         if(data.items?.length!==files.length)throw new Error("Syllabus upload preparation failed.");
         current={files:[...files],items:data.items,done:new Set<number>()};
         pending.current=current;
+        setHasPending(true);
       }
       const db=createClient();
       for(let i=0;i<current.files.length;i++){
@@ -63,7 +65,7 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
       });
       const data=await finish.json().catch(()=>({}));
       if(!finish.ok)throw new Error(data.error??"Could not publish the uploaded PDFs. Retry finalization.");
-      pending.current=null;setFiles([]);setClassId("");setTitle("");setOutline("");
+      pending.current=null;setHasPending(false);setFiles([]);setClassId("");setTitle("");setOutline("");
       toast.success(data.count+" syllabus PDF(s) published.");
       router.refresh();
     }catch(error){toast.error(error instanceof Error?error.message:"Syllabus upload failed; retry.");}
@@ -105,8 +107,8 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
       <label className="block text-xs font-semibold">Class<select className="input-base mt-2" required value={classId} onChange={(event) => setClassId(event.target.value)}><option value="">Choose a class</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.display_name || "Class"} · Section {item.section}</option>)}</select></label>
       <label className="block text-xs font-semibold">Syllabus title<input className="input-base mt-2" required minLength={2} maxLength={180} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Course syllabus"/></label>
       <label className="block text-xs font-semibold">Outline text<textarea className="input-base mt-2 min-h-28 resize-y" maxLength={50000} value={outline} onChange={(event) => setOutline(event.target.value)} placeholder="Paste a searchable outline for students and AI study help."/></label>
-      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[var(--line)] p-4 text-xs hover:border-[var(--green)]"><UploadCloud size={17} className="text-[var(--green)]"/><span className="min-w-0 break-all">{files.length?files.length+" PDFs selected":"Choose up to 10 PDFs · 20 MB each"}</span><input className="hidden" type="file" multiple disabled={saving||Boolean(pending.current)} accept="application/pdf,.pdf" onChange={(event) => setFiles(Array.from(event.target.files??[]))}/></label>
-      <button className="btn-primary w-full" disabled={saving || !classId || !title.trim() || !files.length}>{saving ? "Uploading…" : pending.current ? "Retry / finish uploads" : "Upload syllabus PDFs"}<UploadCloud size={14}/></button>
+      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[var(--line)] p-4 text-xs hover:border-[var(--green)]"><UploadCloud size={17} className="text-[var(--green)]"/><span className="min-w-0 break-all">{files.length?files.length+" PDFs selected":"Choose up to 10 PDFs · 20 MB each"}</span><input className="hidden" type="file" multiple disabled={saving||hasPending} accept="application/pdf,.pdf" onChange={(event) => setFiles(Array.from(event.target.files??[]))}/></label>
+      <button className="btn-primary w-full" disabled={saving || !classId || !title.trim() || !files.length}>{saving ? "Uploading…" : hasPending ? "Retry / finish uploads" : "Upload syllabus PDFs"}<UploadCloud size={14}/></button>
     </form> : null}
     <section className="surface min-w-0 p-4 sm:p-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">

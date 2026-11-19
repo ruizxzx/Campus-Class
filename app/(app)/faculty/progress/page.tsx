@@ -28,7 +28,7 @@ export default async function FacultyProgress({searchParams}:{
   if(courseError)throw new Error("Could not load accessible courses.");
   const selected=(courses??[]).find(c=>c.id===params.course)??courses?.[0];
   type ReportRow={id:string;full_name:string;email:string;done:number;total:number};
-  let rows:ReportRow[]=[];let total=0;
+  const rows:ReportRow[]=[];let total=0;
   if(selected) {
     const ids=allowed.filter(cls=>cls.subject_id===selected.subject_id).map(cls=>cls.id);
     const enrolled=new Set<string>();
