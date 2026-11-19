@@ -35,12 +35,12 @@ export function parseIsoDuration(input:string|null|undefined):number{
   return Math.min(864000,Math.round(Number(match[1]||0)*604800+Number(match[2]||0)*86400+
     Number(match[3]||0)*3600+Number(match[4]||0)*60+Number(match[5]||0)));
 }
-type YoutubeItem={
+type YouTubeItem={
   id?:string;snippet?:{title?:string;description?:string;position?:number;
     resourceId?:{videoId?:string};thumbnails?:{medium?:{url?:string};default?:{url?:string}}};
   contentDetails?:{videoId?:string};
 };
-type YoutubeVideoDetails={
+type YouTubeVideoDetails={
   id?:string;snippet?:{title?:string;description?:string;
     thumbnails?:{medium?:{url?:string};default?:{url?:string}}};
   contentDetails?:{duration?:string};

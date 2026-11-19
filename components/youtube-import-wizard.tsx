@@ -16,7 +16,8 @@ type Video={id:string;video_id:string|null;playlist_position:number;title:string
  availability:string;selected:boolean;existing?:boolean;reordered?:boolean};
 type Group={id:string;title:string;ids:string[]};
 type Detail={job:{id:string;status:string;title:string|null;description:string|null;total:number;
- processed:number;thumbnail:string|null;failure:string|null;mode:string;next_page:boolean};
+ processed:number;thumbnail:string|null;failure:string|null;mode:string;next_page:boolean;
+ target_course_id:string|null};
  videos:Video[];page:number;has_more:boolean};
 const input="input-base w-full mt-2";
 async function jsonFetch(url:string,opts?:RequestInit):Promise<Record<string,unknown>>{
