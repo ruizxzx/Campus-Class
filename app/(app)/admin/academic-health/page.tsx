@@ -51,6 +51,9 @@ const migrations=[
   ["042","202611190042_study_material_text_indexing.sql"],
   ["043","202611190043_study_library_history_rls.sql"],
   ["044","202611190044_lesson_progress_server_writes.sql"],
+  ["045","202611190045_youtube_playlists_schema.sql"],
+  ["046","202611190046_youtube_import_atomic_functions.sql"],
+  ["047","202611190047_youtube_watch_certificates.sql"],
 ];
 export default async function AcademicHealthPage(){
   await requireRole(["admin"]);

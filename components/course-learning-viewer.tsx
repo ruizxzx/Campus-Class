@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { BookOpen, Check, Circle, Clock3, ExternalLink, Play, PlayCircle } from "lucide-react";
 import { LessonCompleteButton } from "@/components/lesson-complete-button";
+import { YoutubeTrackedPlayer } from "@/components/youtube-tracked-player";
 import { AIResourceAssistant } from "@/components/ai-resource-assistant";
 
 export type LearningLesson = {
@@ -13,6 +14,7 @@ export type LearningLesson = {
   video_url: string | null;
   duration_minutes: number | null;
   is_published: boolean;
+  youtubeVideoId?: string | null;
 };
 
 export type LearningModule = {
@@ -71,10 +73,12 @@ export function CourseLearningViewer({
   modules,
   initialCompletedLessonIds,
   isStudent,
+  youtubeInitialPercents = {},
 }: {
   modules: LearningModule[];
   initialCompletedLessonIds: string[];
   isStudent: boolean;
+  youtubeInitialPercents?: Record<string, number>;
 }) {
   const lessons = useMemo(() => modules.flatMap((module) => module.lessons.map((lesson) => ({
     ...lesson,
@@ -132,7 +136,12 @@ export function CourseLearningViewer({
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
       <section ref={playerRef} id="course-player" className="surface min-w-0 scroll-mt-20 overflow-hidden">
         <div className="relative aspect-video bg-[#111815]">
-          {youtubeVideoId && !videoLoaded ? (
+          {selectedLesson?.youtubeVideoId && isStudent ? (
+            <YoutubeTrackedPlayer key={selectedLesson.id} lessonId={selectedLesson.id}
+              videoId={selectedLesson.youtubeVideoId} enabled={isStudent}
+              initialPercent={youtubeInitialPercents[selectedLesson.id] ?? 0}
+              onComplete={() => setCompletedIds(current => new Set(current).add(selectedLesson.id))}/>
+          ) : youtubeVideoId && !videoLoaded ? (
             <button
               type="button"
               className="group absolute inset-0 h-full w-full overflow-hidden text-left"
@@ -197,7 +206,7 @@ export function CourseLearningViewer({
               Open video in a new tab <ExternalLink size={13}/>
             </a>
           ) : null}
-          {isStudent && selectedLesson ? (
+          {isStudent && selectedLesson && !selectedLesson.youtubeVideoId ? (
             <div className="mt-6 border-t border-[var(--line)] pt-4">
               <LessonCompleteButton
                 key={selectedLesson.id}
@@ -206,6 +215,8 @@ export function CourseLearningViewer({
                 onComplete={() => setCompletedIds((current) => new Set(current).add(selectedLesson.id))}
               />
             </div>
+          ) : selectedLesson?.youtubeVideoId && isStudent ? (
+            <p className="mt-4 text-xs text-[var(--muted)]">Imported YouTube lectures complete automatically once you watch at least the required proportion of the video. Skipping to the end does not count.</p>
           ) : null}
         </div>
       </section>

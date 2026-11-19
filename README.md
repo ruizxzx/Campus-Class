@@ -227,3 +227,12 @@ Apply migrations in order. Review policies in a staging Supabase project before 
 
 ### Implementation status
 Build 1.3 adds the workflows above but is not production-certified. Apply migrations in timestamp order and complete the two-college role/RLS and private-storage tests before release. See `BUILD_NOTES_1.3.md` for verified command results and remaining gaps. Certificate PDF rendering, scheduled stream publication, realtime wiring, full rich-text authoring and the AI tutor remain follow-up work.
+
+## Smart YouTube playlist-to-course importer
+
+Faculty and college administrators can open **Learning studio → Course → Import YouTube playlists**
+to create real, editable courses from official YouTube Data API v3 playlist metadata.
+See [Smart YouTube Playlist Importer](docs/YOUTUBE_PLAYLIST_IMPORTER.md) for setup,
+forward-only migrations 045–047, worker and playback behavior, test matrix,
+and production limitations. Configure a server-only `YOUTUBE_DATA_API_KEY`;
+never expose it as a `NEXT_PUBLIC_` environment variable.

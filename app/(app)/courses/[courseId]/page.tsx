@@ -69,13 +69,30 @@ export default async function CourseDetail({ params }: { params: Promise<{ cours
     }
   }
   const modules = (course.course_modules ?? []).slice().sort((a, b) => a.position - b.position);
+  const importedVideos = new Map<string,string>();
+  let youtubeInitialPercents:Record<string,number> = {};
+  const { data: sources, error: sourceError } = await db.from("youtube_lesson_sources")
+    .select("lesson_id,video_id").eq("college_id",profile.college_id)
+    .eq("course_id",courseId);
+  // Until SQL 045 is installed, existing ordinary course pages stay usable.
+  if(sourceError && sourceError.code!=="PGRST205" && sourceError.code!=="42P01")
+    throw new Error("Could not load course video sources.");
+  for(const link of sources??[])importedVideos.set(link.lesson_id,link.video_id);
+  if(profile.role==="student"&&importedVideos.size){
+    const {data:watchRows,error:watchError}=await db.from("youtube_watch_progress")
+      .select("lesson_id,percent").eq("college_id",profile.college_id)
+      .eq("student_id",profile.id).eq("course_id",courseId);
+    if(watchError)throw new Error("Could not load tracked YouTube video progress.");
+    youtubeInitialPercents=Object.fromEntries((watchRows??[]).map(item=>[item.lesson_id,Number(item.percent)]));
+  }
   const visibleModules: LearningModule[] = modules.map((module) => ({
     id: module.id,
     title: module.title,
     description: module.description,
     lessons: (module.course_lessons ?? [])
       .filter((lesson) => profile.role !== "student" || lesson.is_published)
-      .sort((a, b) => a.position - b.position),
+      .sort((a, b) => a.position - b.position)
+      .map(lesson=>({...lesson,youtubeVideoId:importedVideos.get(lesson.id)??null})),
   }));
   const visibleLessonIds = visibleModules.flatMap((module) => module.lessons.map((lesson) => lesson.id));
   const progressResult = profile.role === "student" && visibleLessonIds.length
@@ -122,6 +139,7 @@ export default async function CourseDetail({ params }: { params: Promise<{ cours
         modules={visibleModules}
         initialCompletedLessonIds={[...completed]}
         isStudent={profile.role === "student" && canTrackProgress}
+        youtubeInitialPercents={youtubeInitialPercents}
       />
     </>
   );

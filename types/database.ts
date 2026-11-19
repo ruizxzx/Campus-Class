@@ -75,3 +75,24 @@ export type Assignment = {
   created_at: string;
   classes?: { display_name: string | null; section: string; subjects?: { name: string; code: string } | null } | null;
 };
+
+/** Durable import jobs and academic playback evidence (SQL 045–047). */
+export type YoutubePlaylistImportStatus = "queued" | "processing" | "review" |
+  "applying" | "applied" | "failed" | "cancelled";
+export type YoutubeImportJob = {
+  id: string; college_id: string; created_by: string; subject_id: string;
+  target_course_id: string | null; playlist_id: string;
+  batch_id: string; status: YoutubePlaylistImportStatus;
+  processed_count: number; expected_count: number;
+  next_page_token: string | null; failure_message: string | null;
+};
+export type YoutubeImportedLesson = {
+  college_id: string; course_id: string; lesson_id: string;
+  source_id: string; video_id: string; duration_seconds: number;
+  playlist_position: number; removed_from_playlist_at: string | null;
+};
+export type YoutubeStudentWatchProgress = {
+  college_id: string; course_id: string; lesson_id: string; student_id: string;
+  position_seconds: number; duration_seconds: number; watched_seconds: number;
+  percent: number; completed_at: string | null; last_activity_at: string;
+};

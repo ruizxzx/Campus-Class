@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, BookOpen, ClipboardCheck, FileUp, Megaphone, Plus, 
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { QuizAuthoringForm } from "@/components/quiz-authoring-form";
+import { YoutubeImportWizard } from "@/components/youtube-import-wizard";
 
 type ClassItem = {
   id: string;
@@ -23,6 +24,7 @@ const input = "input-base";
 
 export function FacultyLearningStudio({ classes, subjects, initialTab = "stream" }: { classes: ClassItem[]; subjects: Subject[]; initialTab?: StudioTab }) {
   const [tab, setTab] = useState<StudioTab>(initialTab);
+  const [courseMethod, setCourseMethod] = useState<"manual" | "youtube">("manual");
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   const [stream, setStream] = useState({ classId: "", title: "", body: "", type: "announcement" });
@@ -316,6 +318,22 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
         ) : null}
 
         {tab === "course" ? (
+          <div className="min-w-0 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Course creation method">
+              <button type="button" aria-pressed={courseMethod==="manual"}
+                onClick={()=>setCourseMethod("manual")}
+                className={"flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors "+(courseMethod==="manual"?"border-[var(--green)] bg-[var(--green-soft)]":"border-[var(--line)] bg-[var(--surface)]")}>
+                <BookOpen size={20}/><span><span className="block text-xs font-semibold">Create manually</span>
+                <span className="block text-[11px] text-[var(--muted)]">Your existing chapter and lecture editor</span></span>
+              </button>
+              <button type="button" aria-pressed={courseMethod==="youtube"}
+                onClick={()=>setCourseMethod("youtube")}
+                className={"flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors "+(courseMethod==="youtube"?"border-[var(--green)] bg-[var(--green-soft)]":"border-[var(--line)] bg-[var(--surface)]")}>
+                <FileUp size={20}/><span><span className="block text-xs font-semibold">Import YouTube playlists</span>
+                <span className="block text-[11px] text-[var(--muted)]">Automated lectures, previews and watch progress</span></span>
+              </button>
+            </div>
+            {courseMethod==="youtube"?<YoutubeImportWizard subjects={subjects}/>:(
           <form onSubmit={saveCourse} className="surface min-w-0 space-y-5 p-5 sm:p-6">
             <div className="flex items-start gap-3 border-b border-[var(--line)] pb-4">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green-strong)]"><BookOpen size={18} /></span>
@@ -409,6 +427,8 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
               </button>
             </div>
           </form>
+            )}
+          </div>
         ) : null}
 
         {tab === "quiz" ? <QuizAuthoringForm classes={classes} /> : null}
