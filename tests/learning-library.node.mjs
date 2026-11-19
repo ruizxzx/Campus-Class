@@ -109,3 +109,14 @@ test("course page explains enrollment when completion cannot be safely saved",()
  assert.match(page,/Join your subject class/);
  assert.match(page,/isStudent=\{profile.role === "student" && canTrackProgress\}/);
 });
+
+test("Supabase RLS prevents students selecting superseded library version text",()=>{
+ const sql=read("supabase/migrations/202611190043_study_library_history_rls.sql");
+ assert.match(sql,/create or replace function private.can_read_study_material_version/);
+ assert.match(sql,/m\.current_version=v\.version/);
+ assert.match(sql,/private\.is_faculty_in_class/);
+ assert.match(sql,/drop policy if exists "library version visibility"/);
+ assert.match(sql,/drop policy if exists "library chunk visibility"/);
+ assert.match(sql,/private\.can_read_study_material_version\(college_id,material_id,version_id\)/);
+ assert.doesNotMatch(sql,/drop table|truncate table|disable row level security/i);
+});

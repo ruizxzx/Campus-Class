@@ -40,3 +40,5 @@ Run in the **correct Campus Class production Supabase SQL Editor** in this exact
 
 ## Historical document safety
 The student library's full-text results include only the material's **current version**. Historic versions remain accessible to authorized faculty for audit/restore, but superseded file text cannot appear in student search snippets.
+
+**Critical:** Apply SQL 043 before enabling the library for students; the initial 041 policy is too permissive for historical version metadata and extracted text until tightened by 043.

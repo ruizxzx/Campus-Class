@@ -49,6 +49,7 @@ const migrations=[
   ["040","202611190040_lesson_progress_certificates.sql"],
   ["041","202611190041_study_materials_library.sql"],
   ["042","202611190042_study_material_text_indexing.sql"],
+  ["043","202611190043_study_library_history_rls.sql"],
 ];
 export default async function AcademicHealthPage(){
   await requireRole(["admin"]);
