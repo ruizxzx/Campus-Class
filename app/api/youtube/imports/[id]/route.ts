@@ -19,7 +19,7 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string}>}
    .eq("college_id",actor.profile.college_id).eq("job_id",id)
    .order("playlist_position",{ascending:true}).range(page*100,page*100+99);
  if(error)return NextResponse.json({error:"Could not load playlist video metadata."},{status:503});
- let existing:{video_id:string;lesson_id:string;playlist_position:number}[]=[];
+ const existing:{video_id:string;lesson_id:string;playlist_position:number}[]=[];
  if(job.mode==="sync"&&job.target_course_id){
    const {data:sources,error:sourceError}=await db.from("youtube_playlist_sources")
      .select("id").eq("college_id",actor.profile.college_id)
