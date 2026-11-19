@@ -120,3 +120,11 @@ test("Supabase RLS prevents students selecting superseded library version text",
  assert.match(sql,/private\.can_read_study_material_version\(college_id,material_id,version_id\)/);
  assert.doesNotMatch(sql,/drop table|truncate table|disable row level security/i);
 });
+
+test("student lesson XP cannot be farmed with a direct browser database INSERT",()=>{
+ const sql=read("supabase/migrations/202611190044_lesson_progress_server_writes.sql");
+ assert.match(sql,/revoke insert, update, delete on table public.lesson_progress/i);
+ assert.match(sql,/from public, anon, authenticated/i);
+ assert.match(sql,/grant select, insert on table public.lesson_progress to service_role/i);
+ assert.doesNotMatch(sql,/drop table|truncate table|disable row level security/i);
+});
