@@ -5,8 +5,13 @@ export type YouTubeVideo = {
   availability:"available"|"private"|"deleted"|"unembeddable"|"unavailable";
 };
 export class YouTubeApiError extends Error {
-  constructor(message:string,public readonly status:number,public readonly retryable=false){
-    super(message);this.name="YouTubeApiError";
+  readonly status:number;
+  readonly retryable:boolean;
+  constructor(message:string,status:number,retryable=false){
+    super(message);
+    this.name="YouTubeApiError";
+    this.status=status;
+    this.retryable=retryable;
   }
 }
 export function parsePlaylistUrl(value:string):string {
