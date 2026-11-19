@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requestProfile, isResponse } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAuthorizedImport } from "@/lib/youtube-access";
+import { describeYoutubeApplyError } from "@/lib/youtube-apply-error";
 export const runtime="nodejs";export const maxDuration=60;
 const item=z.object({
   item_id:z.string().uuid(),
@@ -42,9 +43,9 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
    p_modules:body.modules,p_overwrite_titles:body.overwrite_titles,
  });
  if(error){
-   console.error("Atomic YouTube course apply rejected",{code:error.code});
-   return NextResponse.json({error:error.message.includes("already")?error.message:
-     "Could not apply this course. Verify selections, ownership, and forward SQL 046."},{status:503});
+   const failure=describeYoutubeApplyError(error);
+   console.error("Atomic YouTube course apply rejected",{code:error.code,reason:failure.reason});
+   return NextResponse.json({error:failure.message},{status:failure.status});
  }
  return NextResponse.json({success:true,...data});
 }

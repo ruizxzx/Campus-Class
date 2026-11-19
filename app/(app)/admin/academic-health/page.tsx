@@ -54,6 +54,7 @@ const migrations=[
   ["045","202611190045_youtube_playlists_schema.sql"],
   ["046","202611190046_youtube_import_atomic_functions.sql"],
   ["047","202611190047_youtube_watch_certificates.sql"],
+  ["048","202611190048_youtube_course_publish_service_grants.sql"],
 ];
 export default async function AcademicHealthPage(){
   await requireRole(["admin"]);
@@ -86,6 +87,7 @@ export default async function AcademicHealthPage(){
       <section className="surface p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><Database size={17}/>Database readiness</h2>
         <p className="mt-2 text-xs text-[var(--muted)]">A 42501 permission error on classes, subjects, quizzes or quiz attempts may indicate missing service-role SELECT grants. Apply <a className="underline" target="_blank" rel="noopener noreferrer" href="https://github.com/ruizxzx/Campus-Class/blob/main/supabase/migrations/202611190037_academic_service_read_grants.sql">SQL 037</a> in the correct Supabase project, then reload. If permissions remain denied, verify the production service-role key belongs to that same project.</p>
+        <p className="mt-2 text-xs text-[var(--muted)]">If YouTube playlists fetch successfully but publishing fails with database error 42501, apply <a className="underline" target="_blank" rel="noopener noreferrer" href="https://github.com/ruizxzx/Campus-Class/blob/main/supabase/migrations/202611190048_youtube_course_publish_service_grants.sql">forward SQL 048</a> to restore the server-only course insert and update privileges. This check does not authorize end users to bypass college permissions.</p>
         <p className="mt-2 text-xs text-[var(--muted)]">Assignment and announcement notification failures, or faculty stream posting errors, may require <a className="underline" target="_blank" rel="noopener noreferrer" href="https://github.com/ruizxzx/Campus-Class/blob/main/supabase/migrations/202611190038_notifications_and_stream_service_grants.sql">SQL 038</a>. This is a separate forward-only patch from SQL 037.</p>
         <div className="mt-3 table-wrap"><table className="table-base min-w-[560px]"><thead>
           <tr><th>Requirement</th><th>Migration</th><th>Result</th></tr></thead><tbody>

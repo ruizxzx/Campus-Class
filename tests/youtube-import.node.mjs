@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { summarizeYoutubeSync } from "../lib/youtube-sync.ts";
+import { describeYoutubeApplyError } from "../lib/youtube-apply-error.ts";
 import {
  parsePlaylistUrl,parseIsoDuration,fetchPlaylistMeta,fetchPlaylistPage,YouTubeApiError,
 } from "../lib/youtube-data.ts";
@@ -163,4 +164,23 @@ test("failed playlist jobs are explicitly retried and completion notification is
  assert.match(player,/completedNotified=Boolean\(result.completed\)/);
  assert.match(api,/summarizeYoutubeSync\(existing,fresh\)/);
  assert.match(worker,/course\?\.status!=="active"/);
+});
+
+test("YouTube course publishing migration grants service-role course writes without changing RLS",()=>{
+ const sql=read("supabase/migrations/202611190048_youtube_course_publish_service_grants.sql");
+ for(const table of ["courses","course_modules","course_lessons"]){
+   assert.match(sql,new RegExp("grant select, insert, update on table public\\."+table+" to service_role","i"));
+ }
+ assert.match(sql,/has_function_privilege\(/);
+ assert.doesNotMatch(sql,/disable row level security|drop policy|delete from|truncate table/i);
+});
+test("YouTube publish failures explain missing SQL 048 without exposing PostgreSQL details",()=>{
+ assert.deepEqual(describeYoutubeApplyError({code:"42501",message:"permission denied for table courses"}),{
+   message:"Course publishing is blocked by database permissions. Ask the college administrator to run forward SQL 048, then retry this saved import.",
+   status:503,reason:"permission_denied_table_courses",
+ });
+ assert.equal(describeYoutubeApplyError({code:"42501",message:"Import job owner mismatch"}).status,403);
+ assert.equal(describeYoutubeApplyError({code:"42501",message:"Target course is not in the imported subject"}).status,403);
+ const unknown=describeYoutubeApplyError({code:"XX000",message:"private student data should not appear"});
+ assert.doesNotMatch(unknown.message,/private student data/);
 });

@@ -6,6 +6,9 @@ After existing migrations **001–044**, execute the following new forward-only 
 1. `supabase/migrations/202611190045_youtube_playlists_schema.sql` — tenant-safe job queue, playlist and lesson references, watch evidence, academic requirements, RLS, indexes.
 2. `supabase/migrations/202611190046_youtube_import_atomic_functions.sql` — atomic claim and apply functions, durable checkpoints, idempotent duplicate handling, no destructive re-sync.
 3. `supabase/migrations/202611190047_youtube_watch_certificates.sql` — server-timed watch ranges and optional quiz/assignment/faculty approval certificate gates.
+4. `supabase/migrations/202611190048_youtube_course_publish_service_grants.sql` — restore explicit `service_role` course insert/update privileges required by security-invoker SQL 046. This fixes the permission failure (42501) observed when playlist fetching works but course publishing fails.
+
+If you already applied SQL 045–047, **run only SQL 048**, then reopen your saved review job and click Publish complete course again. The previous database transaction rolled back when apply failed; the playlist metadata remains available. SQL 048 does not replace or edit historical migrations. If the error persists, check the latest Vercel log reason code; role or target-course authorization mismatch errors require checking the staff assignment rather than expanding database access.
 
 These migrations DO NOT run automatically during GitHub deployment. Back up the production database, run staging tests with two colleges, then run the SQL in production.
 
