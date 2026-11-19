@@ -100,3 +100,12 @@ test("faculty can inspect which students finished each lecture, not just totals"
  assert.match(page,/Lecture \{i\+1\}/);
  assert.match(page,/p\.completedLessonIds\.includes\(lesson.id\)/);
 });
+
+test("course page explains enrollment when completion cannot be safely saved",()=>{
+ const page=read("app/(app)/courses/[courseId]/page.tsx");
+ assert.match(page,/canTrackProgress/);
+ assert.match(page,/class_enrollments/);
+ assert.match(page,/status", "active"/);
+ assert.match(page,/Join your subject class/);
+ assert.match(page,/isStudent=\{profile.role === "student" && canTrackProgress\}/);
+});

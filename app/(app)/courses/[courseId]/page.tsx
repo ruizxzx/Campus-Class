@@ -30,6 +30,7 @@ type CourseDetailRow = {
   title: string;
   description: string | null;
   status: string;
+  subject_id: string;
   subjects: { name: string; code: string } | { name: string; code: string }[] | null;
   course_modules: CourseModule[] | null;
 };
@@ -39,7 +40,7 @@ export default async function CourseDetail({ params }: { params: Promise<{ cours
   const profile = await requireProfile();
   const db = await createClient();
   const { data: courseRaw, error } = await db.from("courses")
-    .select("id,title,description,status,subjects(name,code),course_modules(id,title,description,position,course_lessons(id,title,plain_text,video_url,duration_minutes,position,is_published))")
+    .select("id,title,description,status,subject_id,subjects(name,code),course_modules(id,title,description,position,course_lessons(id,title,plain_text,video_url,duration_minutes,position,is_published))")
     .eq("id", courseId)
     .maybeSingle();
   if (error) {
@@ -51,6 +52,22 @@ export default async function CourseDetail({ params }: { params: Promise<{ cours
   // Keep the embedded PostgREST relation shape explicit for this curriculum query.
   const course = courseRaw as CourseDetailRow;
   const subject = Array.isArray(course.subjects) ? course.subjects[0] : course.subjects;
+  let canTrackProgress = profile.role === "student";
+  if (profile.role === "student") {
+    const { data: activeClasses, error: classError } = await db.from("classes")
+      .select("id").eq("college_id", profile.college_id)
+      .eq("subject_id", course.subject_id).eq("is_active", true);
+    if (classError) throw new Error("Could not check course enrollment.");
+    canTrackProgress = false;
+    if (activeClasses?.length) {
+      const { data: enrollment, error: enrollmentError } = await db.from("class_enrollments")
+        .select("id").eq("college_id", profile.college_id)
+        .eq("student_id", profile.id).eq("status", "active")
+        .in("class_id", activeClasses.map(cls => cls.id)).limit(1);
+      if (enrollmentError) throw new Error("Could not check course enrollment.");
+      canTrackProgress = Boolean(enrollment?.length);
+    }
+  }
   const modules = (course.course_modules ?? []).slice().sort((a, b) => a.position - b.position);
   const visibleModules: LearningModule[] = modules.map((module) => ({
     id: module.id,
@@ -100,10 +117,11 @@ export default async function CourseDetail({ params }: { params: Promise<{ cours
         </div>
       </section>
       {profile.role === "student" ? <div className="mb-4 flex gap-2"><Link className="btn-secondary" href="/certificates">My course certificates</Link><Link className="btn-secondary" href="/library">Study materials library</Link></div> : <div className="mb-4 flex gap-2"><Link className="btn-secondary" href={"/faculty/progress?course="+courseId}>See student completion report</Link><Link className="btn-secondary" href="/library">Upload course materials</Link></div>}
+      {profile.role === "student" && !canTrackProgress ? <section className="surface p-4 mb-4 text-sm text-[var(--muted)]">You can explore the lessons, but completion tracking and course certificates require joining an active class for this subject. <Link className="font-semibold underline" href="/join">Join your subject class</Link>, then return to mark lectures complete.</section> : null}
       <CourseLearningViewer
         modules={visibleModules}
         initialCompletedLessonIds={[...completed]}
-        isStudent={profile.role === "student"}
+        isStudent={profile.role === "student" && canTrackProgress}
       />
     </>
   );
