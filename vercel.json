@@ -13,10 +13,6 @@
     {
       "path": "/api/cron/youtube-imports",
       "schedule": "15 3 * * *"
-    },
-    {
-      "path": "/api/cron/bulk-accounts",
-      "schedule": "* * * * *"
     }
   ]
 }
