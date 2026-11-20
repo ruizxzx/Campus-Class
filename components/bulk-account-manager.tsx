@@ -8,7 +8,7 @@ type Role="faculty"|"student";
 type Entry={full_name:string;email:string;role:Role;department?:string;semester?:number|null;section?:string;identifier?:string;synthetic?:boolean};
 type Result={id:string;created_at:string;credentials_available:boolean;total:number;counts:Record<string,number>;rows:Array<Entry & {id:string;position:number;status:string;reason:string|null}>};
 const header=["full_name","email","role","department","semester","section","identifier"];
-function csvCell(v:unknown){const s=String(v??"");return /[,"\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function csvCell(v:unknown){const raw=String(v??"");const s=/^\s*[=+@-]/.test(raw)?"\u0027"+raw:raw;return /[,"\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 function download(name:string,rows:string[][]){
  const csv="\uFEFF"+rows.map(r=>r.map(csvCell).join(",")).join("\r\n")+"\r\n";
  const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
