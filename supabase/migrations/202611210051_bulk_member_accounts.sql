@@ -6,6 +6,7 @@ create table if not exists public.bulk_account_batches (
  idempotency_key uuid not null,
  created_at timestamptz not null default now(),
  credentials_exported_at timestamptz,
+ last_claimed_at timestamptz,
  unique (college_id,idempotency_key),
  unique (college_id,id),
  foreign key (college_id,created_by) references public.profiles(college_id,id)
@@ -62,3 +63,31 @@ begin
 end $$;
 revoke all on function public.claim_bulk_account_rows(integer) from public, anon, authenticated;
 grant execute on function public.claim_bulk_account_rows(integer) to service_role;
+
+-- Admin-triggered short worker chunks support Vercel Hobby and resume after refresh.
+-- The per-batch cooldown prevents simultaneous admin requests from multiplying Auth calls.
+create or replace function public.claim_bulk_account_rows_for_batch(
+ p_college_id uuid, p_batch_id uuid, p_limit integer default 8
+) returns setof public.bulk_account_rows
+language plpgsql security definer set search_path = ''
+as $$
+declare v_id uuid;
+begin
+ update public.bulk_account_batches b set last_claimed_at=now()
+ where b.id=p_batch_id and b.college_id=p_college_id
+  and (b.last_claimed_at is null or b.last_claimed_at < now() - interval '4 seconds')
+ returning b.id into v_id;
+ if v_id is null then return; end if;
+ return query
+ with claimed as (
+  select r.id from public.bulk_account_rows r
+  where r.college_id=p_college_id and r.batch_id=p_batch_id and
+  (r.status='pending' or (r.status='processing' and r.locked_at < now()-interval '5 minutes'))
+  order by r.position for update skip locked limit least(greatest(p_limit,1),8)
+ )
+ update public.bulk_account_rows r
+ set status='processing',locked_at=now(),attempts=r.attempts+1
+ from claimed where r.id=claimed.id returning r.*;
+end $$;
+revoke all on function public.claim_bulk_account_rows_for_batch(uuid,uuid,integer) from public, anon, authenticated;
+grant execute on function public.claim_bulk_account_rows_for_batch(uuid,uuid,integer) to service_role;
