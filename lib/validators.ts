@@ -6,6 +6,7 @@ export const inviteSchema = z.object({
   full_name: z.string().trim().min(2).max(120),
   role: z.enum(["faculty", "student"]),
   password: z.string().min(8).max(128),
+  send_setup_email: z.boolean().default(false),
 });
 export const acceptInviteSchema = z.object({
   token: z.string().min(32).max(256).optional(),
