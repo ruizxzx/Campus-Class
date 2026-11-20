@@ -37,7 +37,7 @@ export default async function CertificateDetail({params}:{params:Promise<{certif
       <div className="mt-12 border-t border-gray-300 pt-5 text-sm">Certificate ID: {cert.certificate_number}</div>
       <div className="mt-2 text-xs">Issued automatically by Campus Class for {collegeName}</div>
       <div className="mt-2 text-xs break-all">
-        Verify: {(process.env.NEXT_PUBLIC_APP_URL??"https://campus-class.vercel.app").replace(/\\/$/,"")}/verify/{cert.certificate_number}
+        Verify: {(process.env.NEXT_PUBLIC_APP_URL??"https://campus-class.vercel.app").replace(/[/]$/,"")}/verify/{cert.certificate_number}
       </div>
     </article>
     <p className="mt-5 text-center text-sm text-[var(--muted)] print:hidden">Use your browser Print command to save this certificate as PDF.</p>
