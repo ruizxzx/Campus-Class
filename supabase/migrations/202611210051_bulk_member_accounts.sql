@@ -5,6 +5,7 @@ create table if not exists public.bulk_account_batches (
  created_by uuid not null,
  idempotency_key uuid not null,
  created_at timestamptz not null default now(),
+ credentials_exported_at timestamptz,
  unique (college_id,idempotency_key),
  unique (college_id,id),
  foreign key (college_id,created_by) references public.profiles(college_id,id)
