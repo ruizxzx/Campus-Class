@@ -29,6 +29,7 @@ create table if not exists public.bulk_account_rows (
  auth_user_id uuid,
  attempts integer not null default 0,
  locked_at timestamptz,
+ next_attempt_at timestamptz not null default now(),
  created_at timestamptz not null default now(),
  unique (batch_id,position),
  unique (batch_id,email),
@@ -52,7 +53,7 @@ begin
  return query
  with claimed as (
   select r.id from public.bulk_account_rows r
-  where r.status = 'pending'
+  where (r.status = 'pending' and r.next_attempt_at <= now())
      or (r.status = 'processing' and r.locked_at < now() - interval '5 minutes')
   order by r.created_at,r.position
   for update skip locked
@@ -82,7 +83,7 @@ begin
  with claimed as (
   select r.id from public.bulk_account_rows r
   where r.college_id=p_college_id and r.batch_id=p_batch_id and
-  (r.status='pending' or (r.status='processing' and r.locked_at < now()-interval '5 minutes'))
+  ((r.status='pending' and r.next_attempt_at <= now()) or (r.status='processing' and r.locked_at < now()-interval '5 minutes'))
   order by r.position for update skip locked limit least(greatest(p_limit,1),8)
  )
  update public.bulk_account_rows r
