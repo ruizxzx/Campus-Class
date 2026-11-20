@@ -41,7 +41,7 @@ create policy bulk_batches_admin_read on public.bulk_account_batches for select 
 drop policy if exists bulk_rows_admin_read on public.bulk_account_rows;
 create policy bulk_rows_admin_read on public.bulk_account_rows for select to authenticated using (private.is_admin(college_id));
 grant select on public.bulk_account_batches, public.bulk_account_rows to authenticated;
-grant select,insert,update on public.bulk_account_batches, public.bulk_account_rows to service_role;
+grant select,insert,update,delete on public.bulk_account_batches, public.bulk_account_rows to service_role;
 -- The service-role-only worker atomically leases work across concurrent invocations.
 create or replace function public.claim_bulk_account_rows(p_limit integer default 8)
 returns setof public.bulk_account_rows
