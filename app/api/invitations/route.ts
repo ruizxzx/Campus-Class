@@ -72,9 +72,29 @@ export async function POST(request: Request) {
     console.error(`Member activity log creation failed (${activityError.code}): ${activityError.message}`);
   }
 
+  // Supabase Auth sends a recovery link so the member chooses their own password.
+  // Creation remains successful if SMTP is unavailable; manual credentials work.
+  let emailSent = false;
+  let setupEmailWarning: string | undefined;
+  if (parsed.data.send_setup_email) {
+    try {
+      const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://campus-class.vercel.app";
+      const redirectTo = new URL("/auth/callback?next=/reset-password", base).toString();
+      const { error: emailError } = await admin.auth.resetPasswordForEmail(parsed.data.email, { redirectTo });
+      if (emailError) {
+        console.error("Member setup email failed", {status:emailError.status,code:emailError.code});
+        setupEmailWarning = "Account created, but setup email delivery failed. Share the temporary password securely.";
+      } else emailSent = true;
+    } catch {
+      setupEmailWarning = "Account created, but setup email configuration is invalid. Share the temporary password securely.";
+    }
+  }
   return NextResponse.json({
     success: true,
-    message: "Account created without sending email. Share the temporary password securely and ask the member to change it in Settings.",
-    warning: activityError ? "The account was created, but its activity log could not be saved." : undefined,
+    message: emailSent
+      ? "Account created. A password-setup email was requested. Share the temporary password only if needed."
+      : "Account created. Share the temporary password securely and ask the member to change it in Settings.",
+    email_sent: emailSent,
+    warning: [activityError?"The account was created, but its activity log could not be saved.":undefined, setupEmailWarning].filter(Boolean).join(" ") || undefined,
   }, { status: 201 });
 }
