@@ -21,6 +21,7 @@ export function InviteManager({ profile, role }: { profile: Profile; role: "facu
   const [form, setForm] = useState({ full_name: "", email: "", password: "" });
   const [credentials, setCredentials] = useState<{ email: string; password: string; message: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [sendSetupEmail, setSendSetupEmail] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -33,7 +34,7 @@ export function InviteManager({ profile, role }: { profile: Profile; role: "facu
   async function invite(event: React.FormEvent) {
     event.preventDefault(); setSaving(true); setCredentials(null);
     try {
-      const response = await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, role }) });
+      const response = await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, role, send_setup_email: sendSetupEmail }) });
       const result = await response.json(); if (!response.ok) throw new Error(result.error || "Account creation failed.");
       setCredentials({ email: form.email.trim().toLowerCase(), password: form.password, message: result.message });
       setForm({ full_name: "", email: "", password: "" }); setShowPassword(false); toast.success("Member account created.");
@@ -46,11 +47,16 @@ export function InviteManager({ profile, role }: { profile: Profile; role: "facu
   const filtered = rows.filter((r) => `${r.full_name} ${r.email}`.toLowerCase().includes(search.toLowerCase()));
   return <div className="grid gap-5 xl:grid-cols-[.9fr_1.1fr]">
     <Panel>
-      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green)]"><UserPlus size={18}/></div><div><div className="text-sm font-semibold">Create {role} account</div><div className="mt-1 text-[11px] text-[var(--muted)]">Creates an active account immediately. No invitation email is sent.</div></div></div>
+      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green)]"><UserPlus size={18}/></div><div><div className="text-sm font-semibold">Create {role} account</div><div className="mt-1 text-[11px] text-[var(--muted)]">Creates an active account immediately. Optionally send a password setup email via college SMTP.</div></div></div>
       <form onSubmit={invite} className="mt-5 space-y-4">
         <Field label="Full name"><input className="input-base" required minLength={2} maxLength={120} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Enter full name"/></Field>
         <Field label="Email address"><input className="input-base" required type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@college.edu"/></Field>
         <Field label="Temporary password"><div className="relative"><input className="input-base pr-11" required type={showPassword ? "text" : "password"} minLength={8} maxLength={128} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 8 characters"/><button type="button" aria-label="Toggle password visibility" onClick={() => setShowPassword((visible) => !visible)} className="absolute top-1/2 right-3 -translate-y-1/2 text-[var(--muted)]">{showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}</button></div><button type="button" onClick={() => { try { setForm((current) => ({ ...current, password: generateTemporaryPassword() })); setShowPassword(true); } catch (error) { toast.error(error instanceof Error ? error.message : "Could not generate a secure password."); } }} className="mt-2 text-[10px] font-semibold text-[var(--green)]">Generate temporary password</button></Field>
+        <label className="flex items-start gap-2 text-xs text-[var(--muted)]">
+          <input type="checkbox" className="mt-0.5" checked={sendSetupEmail}
+            onChange={e=>setSendSetupEmail(e.target.checked)} disabled={saving}/>
+          Email the new member a secure password-setup link (requires Supabase Auth SMTP).
+        </label>
         <button className="btn-primary w-full" disabled={saving}>{saving ? "Creating account…" : "Create account"}<Plus size={15}/></button>
       </form>
       {credentials && <div className="mt-5 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4">
