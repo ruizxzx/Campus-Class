@@ -24,7 +24,8 @@ export async function processClaimedBulkAccounts(admin:Admin, rows:QueueRow[]) {
   const retry=result.status==="failed" && row.attempts<3 && result.reason==="Temporary server error.";
   const {error}=await admin.from("bulk_account_rows").update({
    status:retry?"pending":result.status,reason:result.reason??result.warning??null,
-   auth_user_id:result.userId??null,locked_at:null
+   auth_user_id:result.userId??null,locked_at:null,
+   next_attempt_at:retry?new Date(Date.now()+Math.min(300000,15000*2**row.attempts)).toISOString():new Date().toISOString()
   }).eq("college_id",row.college_id).eq("id",row.id).eq("status","processing");
   if(error){console.error("Bulk result persistence failed",{code:error.code});needs_recovery++;}
  }
