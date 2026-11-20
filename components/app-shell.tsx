@@ -1,4 +1,5 @@
 "use client";
+import { NotificationBell } from "@/components/notification-bell";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -158,7 +159,7 @@ export function AppShell({ profile, children }: { profile: Profile; children: Re
     <header className="fixed top-0 right-0 left-0 z-20 flex h-[66px] min-w-0 items-center justify-between gap-2 border-b border-[var(--line)] bg-[var(--surface)]/95 px-3 backdrop-blur sm:px-5 md:left-[252px] md:px-8">
       <div className="flex min-w-0 items-center gap-2 md:hidden"><button ref={menuButtonRef} type="button" className="btn-secondary !h-10 !w-10 shrink-0 !p-2" onClick={() => setMobileOpen(true)} aria-label="Open navigation" aria-controls="mobile-sidebar" aria-expanded={mobileOpen}><Menu size={19}/></button><div className="min-w-0 scale-90 origin-left sm:scale-100"><BrandMark/></div></div>
       <div className="hidden text-xs font-medium text-[var(--muted)] md:block">Academic workspace <span className="mx-2 text-[var(--line)]">/</span><span className="capitalize text-[var(--text)]">{profile.role}</span></div>
-      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 sm:gap-3"><PWAInstallButton/><Link href="/notifications" aria-label="Notifications" className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[var(--muted)] hover:bg-[var(--surface-2)]"><Bell size={18}/></Link><div className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--green-soft)] text-xs font-bold text-[var(--green-strong)] sm:grid">{profile.full_name.slice(0,1).toUpperCase()}</div><div className="hidden max-w-36 text-right lg:block"><div className="truncate text-[11px] font-semibold">{profile.full_name}</div><div className="text-[10px] capitalize text-[var(--muted)]">{profile.role}</div></div></div>
+      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 sm:gap-3"><PWAInstallButton/><NotificationBell userId={profile.id}/><div className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--green-soft)] text-xs font-bold text-[var(--green-strong)] sm:grid">{profile.full_name.slice(0,1).toUpperCase()}</div><div className="hidden max-w-36 text-right lg:block"><div className="truncate text-[11px] font-semibold">{profile.full_name}</div><div className="text-[10px] capitalize text-[var(--muted)]">{profile.role}</div></div></div>
     </header>
 
     {mobileOpen && <div className="fixed inset-0 z-50 md:hidden">

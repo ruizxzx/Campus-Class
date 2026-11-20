@@ -135,11 +135,16 @@ export async function POST(request:Request){
       if(signError||!signed?.token)return NextResponse.json({error:"Could not sign the upload. SQL 041 may be missing."},{status:503});
       return NextResponse.json({items:[{material_id:material.id,version_id:versionId,path,token:signed.token,name:body.file.name}]});
     }
-    // Activate only versions that were actually uploaded to private Storage.
+    // Validate every material, version, permission and Storage object BEFORE
+    // publishing any record. SQL 050 commits multi-file batches atomically.
+    if(new Set(body.items.map(item=>item.material_id)).size!==body.items.length)
+      return NextResponse.json({error:"Each material may appear only once per batch."},{status:400});
+    const verified:{material_id:string;version_id:string;version:number}[]=[];
     for(const item of body.items){
       const {data:material,error:materialError}=await db.from("study_materials")
-        .select("id,class_id").eq("id",item.material_id).eq("college_id",college).maybeSingle();
+        .select("id,class_id,status").eq("id",item.material_id).eq("college_id",college).maybeSingle();
       if(materialError||!material)return NextResponse.json({error:"Could not verify library material."},{status:503});
+      if(material.status==="archived")return NextResponse.json({error:"Archived library items cannot be published."},{status:409});
       if(!await libraryClassAccess(actor,material.class_id,true))
         return NextResponse.json({error:"No permission to publish these materials."},{status:403});
       const {data:version,error:versionError}=await db.from("study_material_versions")
@@ -147,13 +152,31 @@ export async function POST(request:Request){
         .eq("material_id",item.material_id).eq("id",item.version_id).maybeSingle();
       if(versionError||!version)return NextResponse.json({error:"File version not found."},{status:404});
       if(!await verifyPresent(version.storage_path,version.file_size))
-        return NextResponse.json({error:"An upload is incomplete or has a different file size. Retry the missing file before publishing."},{status:409});
-      const {error:updateError}=await db.from("study_materials").update({
-        status:"published",current_version:version.version,updated_at:new Date().toISOString(),
-      }).eq("id",material.id).eq("college_id",college);
-      if(updateError)return NextResponse.json({error:"Could not publish an uploaded material. Retry publication."},{status:503});
+        return NextResponse.json({error:"An upload is incomplete or has a different file size. No items were published."},{status:409});
+      verified.push({material_id:material.id,version_id:version.id,version:version.version});
     }
-    return NextResponse.json({success:true,published:body.items.length});
+    if(verified.length>1){
+      const {data:published,error:commitError}=await db.rpc("publish_study_material_batch",{
+        p_college:college,p_actor:actor.userId,
+        p_items:verified.map(({material_id,version_id})=>({material_id,version_id})),
+      });
+      if(commitError){
+        console.error("Atomic library publication failed",{code:commitError.code});
+        return NextResponse.json({
+          error:commitError.code==="PGRST202"||commitError.code==="42883"
+            ?"Apply forward SQL 050 to enable safe multi-file publication. No items were published."
+            :"Could not publish the batch atomically. No items from this request were changed.",
+        },{status:503});
+      }
+      return NextResponse.json({success:true,published:Number(published)});
+    }
+    // Single-file publication is one safe atomic UPDATE and works before SQL 050.
+    const only=verified[0];
+    const {error:updateError}=await db.from("study_materials").update({
+      status:"published",current_version:only.version,updated_at:new Date().toISOString(),
+    }).eq("id",only.material_id).eq("college_id",college);
+    if(updateError)return NextResponse.json({error:"Could not publish the uploaded material."},{status:503});
+    return NextResponse.json({success:true,published:1});
   }catch(error){
     console.error("Library material operation failed",{reason:error instanceof Error?error.message:"unknown"});
     return NextResponse.json({error:"Library operation failed. Verify SQL 041 and your class access."},{status:503});

@@ -42,6 +42,12 @@ export async function POST(request:Request){
    }
    return NextResponse.json({items:files});
  }
+ // First validate ALL files. A single multi-row upsert is one SQL statement
+ // and therefore all-or-nothing even if the batch is retried.
+ if(new Set(body.items.map(file=>file.id)).size!==body.items.length)
+   return NextResponse.json({error:"A PDF appears more than once."},{status:400});
+ const rows:{id:string;college_id:string;class_id:string;created_by:string;title:string;
+  file_name:string;file_size:number;storage_path:string;outline_text:string}[]=[];
  for(const file of body.items){
    if(!file.path.startsWith(actor.profile.college_id+"/"+cls.id+"/"+file.id+"-")
      ||!file.name.toLowerCase().endsWith(".pdf"))
@@ -49,16 +55,18 @@ export async function POST(request:Request){
    const {data:info,error:infoError}=await db.storage.from("class-syllabi").info(file.path);
    const obj=info as unknown as {size?:number;metadata?:{size?:number}}|null;
    if(infoError||Number(obj?.size??obj?.metadata?.size??0)!==file.size)
-     return NextResponse.json({error:"A PDF is missing or incomplete. Retry before publication."},{status:409});
-   const {error:insertError}=await db.from("class_syllabi").insert({
+     return NextResponse.json({error:"A PDF is missing or incomplete. No new PDF metadata was published."},{status:409});
+   rows.push({
      id:file.id,college_id:actor.profile.college_id,class_id:cls.id,
      created_by:actor.userId,title:file.title,file_name:file.name,
      file_size:file.size,storage_path:file.path,outline_text:file.outline,
    });
-   if(insertError&&insertError.code!=="23505"){
-     console.error("Bulk syllabus metadata failed",{code:insertError.code});
-     return NextResponse.json({error:"Could not publish a syllabus. Retry finalization."},{status:503});
-   }
+ }
+ const {error:insertError}=await db.from("class_syllabi")
+   .upsert(rows,{onConflict:"id",ignoreDuplicates:true});
+ if(insertError){
+   console.error("Atomic syllabus batch failed",{code:insertError.code});
+   return NextResponse.json({error:"Could not publish the PDF batch. No new records were committed."},{status:503});
  }
  return NextResponse.json({success:true,count:body.items.length});
 }
