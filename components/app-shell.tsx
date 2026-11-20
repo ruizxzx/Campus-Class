@@ -1,5 +1,5 @@
-import { NotificationBell } from "@/components/notification-bell";
 "use client";
+import { NotificationBell } from "@/components/notification-bell";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
