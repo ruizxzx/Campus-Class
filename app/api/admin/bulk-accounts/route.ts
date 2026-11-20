@@ -24,6 +24,7 @@ export async function POST(request: Request) {
  if (!sameOrigin(request)) return deny("Cross-origin request rejected.",403);
  const parsed=bulkRequestSchema.safeParse(await request.json().catch(()=>null));
  if(!parsed.success) return NextResponse.json({error:"Invalid batch.",issues:parsed.error.issues.map(i=>({path:i.path,message:i.message}))},{status:400});
+ if(!process.env.BULK_ACCOUNT_PASSWORD_SECRET || process.env.BULK_ACCOUNT_PASSWORD_SECRET.length<32) return deny("Bulk account password secret is not configured.",503);
  const admin=createAdminClient(), collegeId=ctx.profile.college_id;
  const {data:previous,error:previousError}=await admin.from("bulk_account_batches").select("id").eq("college_id",collegeId).eq("idempotency_key",parsed.data.idempotency_key).maybeSingle();
  if(previousError) return deny("Could not check previous submissions.",500);
