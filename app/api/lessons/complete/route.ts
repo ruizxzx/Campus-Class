@@ -29,6 +29,20 @@ export async function POST(request: Request) {
   if (!lesson?.is_published || !course || course.status !== "active" || course.college_id !== collegeId)
     return NextResponse.json({ error: "This lecture is not available for completion." }, { status: 404 });
 
+  // Imported YouTube lectures earn progress ONLY through verified watch tracking.
+  const { data: youtubeSource, error: youtubeError } = await admin
+    .from("youtube_lesson_sources").select("lesson_id")
+    .eq("college_id", collegeId).eq("lesson_id", lesson.id).maybeSingle();
+  // Keep ordinary course lessons available before optional playlist SQL 045.
+  if (youtubeError && !["PGRST205", "42P01"].includes(youtubeError.code ?? "")) {
+    return NextResponse.json({ error: "Could not verify the lecture's completion requirements." }, { status: 503 });
+  }
+  if (youtubeSource) {
+    return NextResponse.json({
+      error: "Imported YouTube lectures require verified playback; manual completion is not allowed.",
+    }, { status: 409 });
+  }
+
   const { data: classes, error: classError } = await admin.from("classes")
     .select("id").eq("college_id", collegeId).eq("subject_id", course.subject_id).eq("is_active", true);
   if (classError) return NextResponse.json({ error: "Could not verify course enrollment." }, { status: 503 });
