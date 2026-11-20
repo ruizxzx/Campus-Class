@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types/database";
 import { toast } from "sonner";
@@ -46,6 +47,7 @@ export function InviteManager({ profile, role }: { profile: Profile; role: "facu
 
   const filtered = rows.filter((r) => `${r.full_name} ${r.email}`.toLowerCase().includes(search.toLowerCase()));
   return <div className="grid gap-5 xl:grid-cols-[.9fr_1.1fr]">
+    <div className="surface flex flex-wrap items-center justify-between gap-3 p-4 xl:col-span-2"><div><strong className="text-sm">Need to create many accounts?</strong><p className="mt-1 text-xs text-[var(--muted)]">Generate, import CSV / Excel, or paste faculty and student accounts in one batch.</p></div><Link className="btn-primary" href="/admin/bulk-accounts"><Users size={15}/> Bulk Import / Create Accounts</Link></div>
     <Panel>
       <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green)]"><UserPlus size={18}/></div><div><div className="text-sm font-semibold">Create {role} account</div><div className="mt-1 text-[11px] text-[var(--muted)]">Creates an active account immediately. Optionally send a password setup email via college SMTP.</div></div></div>
       <form onSubmit={invite} className="mt-5 space-y-4">
