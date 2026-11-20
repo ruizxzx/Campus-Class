@@ -121,12 +121,19 @@ export default function BulkAccountManager(){
  useEffect(()=>{try{setJob(localStorage.getItem("campus_bulk_last_job"));}catch{}},[]);
  useEffect(()=>{
   if(!job)return;
-  let active=true;
+  let active=true, processing=false;
   async function poll(){
    try{
     const res=await fetch("/api/admin/bulk-accounts?id="+encodeURIComponent(job!),{cache:"no-store"});
     const json=await res.json();if(!res.ok)throw Error(json.error??"Import status unavailable.");
     if(active)setResult(json);
+    if(active && !processing && (json.counts.pending??0)>0){
+     processing=true;
+     try{
+      const work=await fetch("/api/admin/bulk-accounts/process",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:job})});
+      if(!work.ok){const detail=await work.json().catch(()=>({}));throw Error(detail.error??"Import worker unavailable.");}
+     }finally{processing=false;}
+    }
    }catch(e){if(active)toast.error(e instanceof Error?e.message:"Could not load import status.");}
   }
   void poll();const timer=setInterval(()=>void poll(),6000);
@@ -168,7 +175,7 @@ export default function BulkAccountManager(){
    const data=await res.json();
    if(!res.ok)throw Error(data.issues?.[0]?.message??data.error??"Import failed.");
    setJob(data.id);setResult(null);try{localStorage.setItem("campus_bulk_last_job",data.id);}catch{}
-   toast.success("Batch queued. The scheduled worker will create the accounts.");
+   toast.success("Batch queued. Keep this page open to process immediately, or configure the external scheduler to continue unattended.");
   }catch(e){toast.error(e instanceof Error?e.message:"Could not queue batch.");}
   finally{setBusy(false);}
  }
@@ -213,7 +220,7 @@ export default function BulkAccountManager(){
   {entries.length>0&&<div className="surface p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Review {entries.length} account{entries.length===1?"":"s"}</h3><p className="text-xs text-[var(--muted)]">{invalid} invalid · {entries.filter(r=>r.synthetic).length} demo accounts. Invalid rows must be corrected or skipped.</p></div><div className="flex flex-wrap gap-2"><button className="btn-secondary" onClick={()=>setEntries(a=>a.filter((_,i)=>!errors[i]?.length))} disabled={!invalid}>Skip invalid rows</button><button className="btn-primary" onClick={()=>void start()} disabled={!!invalid||busy||!!job}>{busy?"Queuing…":"Create accounts"}</button></div></div>
    <div className="table-wrap mt-4 max-h-96 overflow-auto"><table className="table-base"><thead><tr><th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Validation</th><th></th></tr></thead><tbody>{entries.map((r,i)=><tr key={i}><td>{i+1}</td><td><input className="input-base min-w-36" aria-label={"Name row "+(i+1)} value={r.full_name} onChange={e=>setEntries(a=>a.map((v,n)=>n===i?{...v,full_name:e.target.value}:v))}/>{r.synthetic&&<span className="text-[10px] text-[var(--muted)]">Demo</span>}</td><td><input className="input-base min-w-52" aria-label={"Email row "+(i+1)} value={r.email} onChange={e=>setEntries(a=>a.map((v,n)=>n===i?{...v,email:e.target.value.toLowerCase()}:v))}/></td><td><select className="input-base" value={r.role} onChange={e=>setEntries(a=>a.map((v,n)=>n===i?{...v,role:e.target.value as Role}:v))}><option value="faculty">Faculty</option><option value="student">Student</option></select></td><td className="text-xs">{errors[i]?.length?<span className="text-red-600">{errors[i].join(" ")}</span>:<span className="text-[var(--green)]">Valid</span>}</td><td><button className="btn-secondary" onClick={()=>setEntries(a=>a.filter((_,n)=>n!==i))} aria-label={"Remove row "+(i+1)}>Remove</button></td></tr>)}</tbody></table></div>
   </div>}
-  {result&&<div className="surface p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Import progress</h3><p className="text-xs text-[var(--muted)]">Batch {result.id} · Progress survives page refresh</p></div><button className="btn-secondary" onClick={()=>{setJob(null);setResult(null);setEntries([]);setRequestKey(crypto.randomUUID());try{localStorage.removeItem("campus_bulk_last_job");}catch{}}}>New batch</button></div>
+  {result&&<div className="surface p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Import progress</h3><p className="text-xs text-[var(--muted)]">Batch {result.id} · Progress survives page refresh; keep this tab open for immediate processing</p></div><button className="btn-secondary" onClick={()=>{setJob(null);setResult(null);setEntries([]);setRequestKey(crypto.randomUUID());try{localStorage.removeItem("campus_bulk_last_job");}catch{}}}>New batch</button></div>
    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">{[["Total",result.total],["Created",result.counts.created],["Existing",result.counts.existing],["Failed",result.counts.failed],["Pending",pending]].map(([label,num])=><div className="rounded-xl bg-[var(--surface-2)] p-3" key={label}><div className="text-2xl font-bold">{num}</div><div className="text-xs text-[var(--muted)]">{label}</div></div>)}</div>
    <progress className="mt-4 h-2 w-full" max={result.total} value={result.total-pending}/>
    <div className="mt-4 flex flex-wrap gap-2"><button className="btn-secondary" onClick={()=>download("campus-class-import-results.csv",[["email","full_name","role","status","reason"],...result.rows.map(r=>[r.email,r.full_name,r.role,r.status,r.reason??""])])}><Download size={15}/> Download results CSV</button><button className="btn-secondary" onClick={()=>void retry()} disabled={busy||!result.counts.failed}><RefreshCw size={15}/> Retry failed</button><button className="btn-primary" onClick={()=>void exportCredentials()} disabled={pending>0||!result.credentials_available||!result.counts.created}>One-time credentials CSV</button></div>
