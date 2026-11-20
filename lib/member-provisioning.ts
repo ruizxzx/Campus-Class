@@ -23,6 +23,7 @@ export async function provisionMember(
   if (authError) {
     if (authError.status === 422 || authError.code === "email_exists") return { status: "existing", reason: "Email already registered." };
     console.error("Member Auth creation failed", { status: authError.status, code: authError.code });
+    if (authError.status === 429 || (authError.status != null && authError.status >= 500)) return { status: "failed", reason: "Temporary server error." };
     return { status: "failed", reason: "Authentication provider rejected account creation." };
   }
   if (!authData.user) return { status: "failed", reason: "Auth account was not returned; verify manually before retrying." };
