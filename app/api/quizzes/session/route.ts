@@ -10,6 +10,19 @@ const schema = z.discriminatedUnion("action", [
     answers: z.record(z.string().uuid(), z.union([z.string().max(5000), z.array(z.string().max(500)).max(50)])) }),
 ]);
 
+// Raw Postgres diagnostics stay in server logs; only operation/code reach clients.
+function databaseFailure(operation: string, error: { code?: string; message?: string; details?: string | null; hint?: string | null }, hint?: string) {
+  const raw = error.code ?? "";
+  const code = /^(?:[0-9A-Z]{5}|PGRST[0-9]{3})$/.test(raw) ? raw : "unknown";
+  console.error("Quiz session database operation failed", {
+    operation, code, message: error.message, detail: error.details, hint: error.hint,
+  });
+  return NextResponse.json({
+    error: "Could not " + operation + ". Reference: " + code + (hint ? ". " + hint : ""),
+    operation, code,
+  }, { status: 503 });
+}
+
 export async function POST(request: Request) {
   const context = await requestProfile();
   if (isResponse(context)) return context;
@@ -24,7 +37,8 @@ export async function POST(request: Request) {
   const { data: quiz, error: quizError } = await db.from("quizzes")
     .select("id,class_id,status,opens_at,closes_at,duration_minutes,attempts_allowed")
     .eq("id", body.quiz_id).eq("college_id", collegeId).maybeSingle();
-  if (quizError || !quiz) return NextResponse.json({ error: "Quiz unavailable." }, { status: quizError ? 503 : 404 });
+  if (quizError) return databaseFailure("load quiz", quizError);
+  if (!quiz) return NextResponse.json({ error: "Quiz unavailable." }, { status: 404 });
   const now = Date.now();
   if (quiz.status !== "published" || (quiz.opens_at && Date.parse(quiz.opens_at) > now)
     || (quiz.closes_at && Date.parse(quiz.closes_at) <= now)) {
@@ -33,21 +47,24 @@ export async function POST(request: Request) {
   const { data: enrollment, error: enrollmentError } = await db.from("class_enrollments")
     .select("id").eq("college_id", collegeId).eq("class_id", quiz.class_id)
     .eq("student_id", context.userId).eq("status", "active").maybeSingle();
-  if (enrollmentError || !enrollment) {
-    return NextResponse.json({ error: "You are not enrolled in this quiz's class." }, { status: enrollmentError ? 503 : 403 });
+  if (enrollmentError) return databaseFailure("verify quiz enrollment", enrollmentError);
+  if (!enrollment) {
+    return NextResponse.json({ error: "You are not enrolled in this quiz's class." }, { status: 403 });
   }
   const { count, error: attemptsError } = await db.from("quiz_attempts")
     .select("id", { count: "exact", head: true }).eq("college_id", collegeId)
     .eq("quiz_id", quiz.id).eq("student_id", context.userId);
-  if (attemptsError) return NextResponse.json({ error: "Unable to count quiz attempts." }, { status: 503 });
+  if (attemptsError) return databaseFailure("count quiz attempts", attemptsError);
   const number = (count ?? 0) + 1;
   if (number > quiz.attempts_allowed) return NextResponse.json({ error: "No attempts remain for this quiz." }, { status: 409 });
   const filter = () => db.from("quiz_attempt_sessions")
     .select("id,draft_answers,started_at,expires_at,updated_at")
     .eq("college_id", collegeId).eq("quiz_id", quiz.id)
     .eq("student_id", context.userId).eq("attempt_number", number);
-  let { data: session, error: sessionError } = await filter().maybeSingle();
-  if (sessionError) return NextResponse.json({ error: "Quiz draft storage is unavailable. Apply migration 202611180027." }, { status: 503 });
+  const existing = await filter().maybeSingle();
+  let session = existing.data;
+  const sessionError = existing.error;
+  if (sessionError) return databaseFailure("load quiz attempt session", sessionError);
 
   if (!session && body.action === "start") {
     // Once started, the attempt's expiration never resets when a tab reloads.
@@ -61,16 +78,18 @@ export async function POST(request: Request) {
       expires_at: new Date(endsAt).toISOString(), draft_answers: {},
     });
     if (insertError && insertError.code !== "23505") {
-      console.error("Quiz session insert failed", { code: insertError.code });
-      return NextResponse.json({ error: insertError.code === "42501"
-        ? "Quiz session could not be created because database permission checks failed. Ask your administrator to verify SQL patches 027, 029 and 053."
-        : "Could not start quiz attempt. Reference: " + (insertError.code ?? "unknown") }, { status: 503 });
+      return databaseFailure("insert quiz attempt session", insertError, insertError.code === "42501"
+        ? "Ask your administrator to inspect session INSERT privileges and the quiz row-lock trigger (027, 029, 053)." : undefined);
     }
     const loaded = await filter().maybeSingle();
+    if (loaded.error) return databaseFailure("reload quiz attempt session after insert", loaded.error);
+    if (!loaded.data) {
+      // A concurrent submission can consume the session between INSERT and read-back.
+      return NextResponse.json({ error: "The quiz attempt state changed during start. Refresh and retry." }, { status: 409 });
+    }
     session = loaded.data;
-    sessionError = loaded.error;
   }
-  if (sessionError || !session) return NextResponse.json({ error: "Start this quiz before saving answers." }, { status: 409 });
+  if (!session) return NextResponse.json({ error: "Start this quiz before saving answers." }, { status: 409 });
   if (now >= Date.parse(session.expires_at)) {
     return NextResponse.json({ error: "Your attempt has expired. Ask faculty to reopen it if required.", expired: true }, { status: 409 });
   }
@@ -81,7 +100,8 @@ export async function POST(request: Request) {
       .update({ draft_answers: body.answers, updated_at: new Date().toISOString() })
       .eq("id", session.id).eq("college_id", collegeId).eq("student_id", context.userId)
       .gt("expires_at", new Date().toISOString()).select("id").maybeSingle();
-    if (error || !updated) return NextResponse.json({ error: "Your answers could not be saved. Check connectivity and the timer." }, { status: 503 });
+    if (error) return databaseFailure("save quiz attempt draft", error);
+    if (!updated) return NextResponse.json({ error: "Your attempt has expired or is no longer active." }, { status: 409 });
     return NextResponse.json({ success: true, savedAt: new Date().toISOString() });
   }
 
