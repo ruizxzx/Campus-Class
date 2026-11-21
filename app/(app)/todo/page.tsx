@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui";
 import { assignmentState, latestSubmissions } from "@/lib/assignment-work-state";
 
+function requestTime() { return Date.now(); }
+
 export default async function TodoPage() {
  const profile=await requireProfile();const db=await createClient();
  const student=profile.role==="student";
@@ -20,7 +22,7 @@ export default async function TodoPage() {
  ]);
  if(assignments.error||submissions.error)throw new Error("Unable to load tasks.");
  const submitted=latestSubmissions(submissions.data??[]);
- const now=Date.now();
+ const now=requestTime();
  const rows=(assignments.data??[]).map(a=>({id:a.id,title:a.title,due_at:a.due_at,status:student?assignmentState(a,submitted,now):assignmentState(a,new Map(),now)}));
  const groups=student?[["Assigned","assigned"],["Missing","missing"],["Completed","completed"]]:[["Upcoming coursework","assigned"],["Past deadlines","missing"]];
  return <><PageHeader title="To-do" description={student?"A consolidated view of coursework across your joined classes.":"Published coursework across your assigned classrooms."}/>
