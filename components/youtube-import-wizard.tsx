@@ -22,7 +22,9 @@ type Detail={job:{id:string;status:string;title:string|null;description:string|n
  missingFromPlaylist:number|null;newToPlaylist:number|null;reorderedInPlaylist:number|null};
 const input="input-base w-full mt-2";
 async function jsonFetch(url:string,opts?:RequestInit):Promise<Record<string,unknown>>{
- const response=await fetch(url,opts);
+ let response:Response;
+ try{response=await fetch(url,{...opts,signal:opts?.signal??AbortSignal.timeout(45_000)});}
+ catch(error){if(error instanceof Error&&error.name==="TimeoutError")throw new Error("The YouTube request timed out. Retry or resume the saved job.");throw error;}
  const data=await response.json().catch(()=>({})) as Record<string,unknown>;
  if(!response.ok)throw new Error(String(data.error??"This playlist request failed. Please retry."));
  return data;
@@ -69,6 +71,7 @@ export function YoutubeImportWizard({subjects}:{subjects:Subject[]}){
  const [groups,setGroups]=useState<Record<string,Group[]>>({});
  const [busy,setBusy]=useState(false);
  const [progress,setProgress]=useState("");
+ const [importError,setImportError]=useState("");
  const [resultCourse,setResultCourse]=useState<string|null>(null);
  const [threshold,setThreshold]=useState(90);
  const [minQuiz,setMinQuiz]=useState(50);
@@ -98,7 +101,7 @@ export function YoutubeImportWizard({subjects}:{subjects:Subject[]}){
        setAssessments({quizzes:(options.quizzes??[]) as typeof assessments.quizzes,
          assignments:(options.assignments??[]) as typeof assessments.assignments});
        setJobs((recent.jobs??[]) as Job[]);
-     }catch{/* Feature still shows setup guidance before SQL 045 is installed. */}
+     }catch(error){if(!cancelled)setImportError(error instanceof Error?error.message:"Could not load playlist import settings.");}
    }
    void load();
    return()=>{cancelled=true;};
@@ -141,7 +144,7 @@ export function YoutubeImportWizard({subjects}:{subjects:Subject[]}){
    event.preventDefault();
    if(!subject||!urls.some(s=>s.trim())){toast.error("Select a subject and enter a playlist.");return;}
    if(mode==="sync"&&!courseId){toast.error("Select the linked course to synchronize.");return;}
-   setBusy(true);setResultCourse(null);
+   setBusy(true);setResultCourse(null);setImportError("");
    try{
      const data=await post("/api/youtube/imports",{
        urls:urls.filter(v=>v.trim()),subject_id:subject,course_id:courseId||null,
@@ -157,17 +160,17 @@ export function YoutubeImportWizard({subjects}:{subjects:Subject[]}){
        await processUntilReview(job.id);
      }
      toast.success("Playlist data fetched. Review lectures before creating the course.");
-   }catch(error){toast.error(error instanceof Error?error.message:"Could not fetch playlists.");}
+   }catch(error){const message=error instanceof Error?error.message:"Could not fetch playlists.";setImportError(message);toast.error(message);}
    finally{setBusy(false);setProgress("");}
  }
  async function continueJob(id:string){
-   setBusy(true);
+   setBusy(true);setImportError("");
    try{
      const status=jobs.find(j=>j.id===id)?.status;
      await processUntilReview(id,status==="failed"||status==="cancelled"?"retry":"process");
      setSelectedJob(id);toast.success("Playlist ready for review.");
    }
-   catch(error){toast.error(error instanceof Error?error.message:"Import still pending.");}
+   catch(error){const message=error instanceof Error?error.message:"Import still pending.";setImportError(message);toast.error(message);}
    finally{setBusy(false);setProgress("");}
  }
  function updateVideo(id:string,patch:Partial<Video>){
@@ -336,6 +339,7 @@ export function YoutubeImportWizard({subjects}:{subjects:Subject[]}){
        {busy?<LoaderCircle size={15} className="animate-spin"/>:<Youtube size={16}/>}
        {busy?"Fetching playlist…":"Fetch and preview playlists"}
      </button>
+     {importError?<p role="alert" className="rounded-lg border border-amber-500 p-3 text-xs">{importError}</p>:null}
      {progress?<p role="status" className="text-xs text-[var(--muted)]">{progress}</p>:null}
    </form>
    {applicableSources.length?<section className="border-t border-[var(--line)] pt-4">
