@@ -6,6 +6,8 @@ import { Users, GraduationCap, BookOpen, School, ClipboardCheck, FileText, Clock
 import { format, isPast } from "date-fns";
 import { assignmentState, latestSubmissions, awaitingRelease } from "@/lib/assignment-work-state";
 
+function requestTime() { return Date.now(); }
+
 export default async function DashboardPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
@@ -57,7 +59,7 @@ export default async function DashboardPage() {
   const visibleIds=new Set(myAssignments.map(a=>a.id));
   const submitted = latestSubmissions((submissions.data ?? []).filter(row=>visibleIds.has(row.assignment_id)));
   const mySubmissions=[...submitted.values()];
-  const now=Date.now();
+  const now=requestTime();
   const overdue = myAssignments.filter(a=>assignmentState(a,submitted,now)==="missing");
   const pending = myAssignments.filter(a=>assignmentState(a,submitted,now)==="assigned");
   const evaluatedCount = mySubmissions.filter((s: any) => s.status === "evaluated").length;
