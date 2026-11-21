@@ -24,11 +24,11 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
     ? await classQuery.limit(150)
     : ids.length ? await classQuery.in("id", ids).limit(150) : { data: [], error: null };
   const allowedIds = (classes ?? []).map((item) => item.id);
-  const history=await collectEvidence<{id:string;class_id:string;title:string;starts_at:string;expires_at:string;closed_at:string|null}>(allowedIds,(batch,from,to)=>db.from("attendance_sessions").select("id,class_id,title,starts_at,expires_at,closed_at").eq("college_id",collegeId).in("class_id",batch).order("starts_at",{ascending:false}).order("id").range(from,to));
+  const history=await collectEvidence<{id:string;class_id:string;title:string;starts_at:string;expires_at:string;closed_at:string|null}>(allowedIds,async(batch,from,to)=>db.from("attendance_sessions").select("id,class_id,title,starts_at,expires_at,closed_at").eq("college_id",collegeId).in("class_id",batch).order("starts_at",{ascending:false}).order("id").range(from,to));
   const sessions=history.data;
   const sessionError=history.error||history.truncated;
   const sessionIds = (sessions ?? []).map((item) => item.id);
-  const attendance=await collectEvidence<{id:string;session_id:string;class_id:string;student_id:string;status:string;recorded_at:string}>(sessionIds,(batch,from,to)=>db.from("attendance_records").select("id,session_id,class_id,student_id,status,recorded_at").eq("college_id",collegeId).in("session_id",batch).order("id").range(from,to));
+  const attendance=await collectEvidence<{id:string;session_id:string;class_id:string;student_id:string;status:string;recorded_at:string}>(sessionIds,async(batch,from,to)=>db.from("attendance_records").select("id,session_id,class_id,student_id,status,recorded_at").eq("college_id",collegeId).in("session_id",batch).order("id").range(from,to));
   const records=attendance.data;
   const recordError=attendance.error||attendance.truncated;
   // Faculty rosters are restricted to their assigned classes, even though this
