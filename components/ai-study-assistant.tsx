@@ -1,4 +1,5 @@
 "use client";
+import {AIMarkdown} from "@/components/ai-markdown";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -78,7 +79,7 @@ export function AIStudyAssistant({ syllabi, notes }: {
         <div className="mt-5 flex flex-wrap justify-center gap-2">{suggestedQuestions.map((item) => <button key={item} type="button" onClick={() => setQuestion(t(item))} className="btn-secondary !rounded-full !px-3 !py-2 text-[10px]">{t(item)}</button>)}</div>
       </div> : messages.map((message, index) => <div key={`${index}-${message.role}`} className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "ml-auto bg-[var(--green-soft)]" : "bg-[var(--surface-2)]"}`}>
         <div className="mb-1 text-[9px] font-bold uppercase tracking-[.12em] text-[var(--muted)]">{message.role === "user" ? t("You") : "CampusClass AI"}</div>
-        <p className="whitespace-pre-wrap">{message.content}</p>
+        {message.role==="assistant"?<AIMarkdown value={message.content}/>:<p className="whitespace-pre-wrap break-words">{message.content}</p>}
         {message.sources?.length ? <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--line)] pt-3" aria-label="Referenced course sources">
           {message.sources.map((source) => <Link key={source.id} href={source.href} className="rounded-full border border-[var(--line)] px-2 py-1 text-[10px] font-semibold hover:text-[var(--green)]" title={source.type + ": " + source.title}>[{source.id}] {source.title}</Link>)}
         </div> : null}

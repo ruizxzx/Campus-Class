@@ -1,4 +1,5 @@
 "use client";
+import {AIMarkdown} from "@/components/ai-markdown";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -56,7 +57,7 @@ export function StudyLibraryAI({materialId,indexed,staff,isPdf}:{
      </div>
    </>}
    {busy?<p className="text-xs text-[var(--muted)]">Processing the verified material…</p>:null}
-   {summary?<article className="whitespace-pre-wrap leading-7 text-sm rounded-xl bg-[var(--surface-2)] p-4">{summary}</article>:null}
+   {summary?<article className="leading-7 text-sm rounded-xl bg-[var(--surface-2)] p-4"><AIMarkdown value={summary}/></article>:null}
    {cards.length>0?<section className="rounded-xl bg-[var(--surface-2)] p-4 space-y-4">
      <div className="text-xs text-[var(--muted)]">Flashcard {cardIndex+1} of {cards.length}</div>
      <button type="button" onClick={()=>setRevealed(v=>!v)}
