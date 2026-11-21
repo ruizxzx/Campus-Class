@@ -25,6 +25,7 @@ export function AIStudyAssistant({ syllabi, notes }: {
   const t=(label:string)=>translateUi(label,language);
   const [question, setQuestion] = useState("");
   const [sending, setSending] = useState(false);
+  const [requestError, setRequestError] = useState("");
   const [mode, setMode] = useState<"chat" | "practice" | "revision">("chat");
   const [syllabusId, setSyllabusId] = useState("");
   const [noteId, setNoteId] = useState("");
@@ -37,19 +38,26 @@ export function AIStudyAssistant({ syllabi, notes }: {
     setMessages((current) => [...current, { role: "user", content: text }]);
     setQuestion("");
     setSending(true);
+    setRequestError("");
     try {
       const response = await fetch("/api/ai/study-assistant", {
         method: "POST",
+        signal: AbortSignal.timeout(60_000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: text, history, mode, syllabus_id: syllabusId || null, note_id: noteId || null }),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "The study assistant could not answer.");
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error ?? `The study assistant could not answer (HTTP ${response.status}).`);
+      if (typeof result?.answer !== "string" || !result.answer.trim()) throw new Error("The AI returned no answer. Please retry.");
       setMessages((current) => [...current, { role: "assistant", content: result.answer, sources: result.sources ?? [] }]);
     } catch (error) {
       setMessages((current) => current.filter((message, index) => !(index === current.length - 1 && message.role === "user" && message.content === text)));
       setQuestion(text);
-      toast.error(error instanceof Error ? error.message : "The study assistant could not answer.");
+      const message = error instanceof Error && error.name === "TimeoutError"
+        ? "The study assistant timed out. Your question was restored; please retry."
+        : error instanceof Error ? error.message : "The study assistant could not answer.";
+      setRequestError(message);
+      toast.error(message);
     } finally {
       setSending(false);
     }
@@ -79,6 +87,7 @@ export function AIStudyAssistant({ syllabi, notes }: {
     </div>
 
     <form onSubmit={ask} className="border-t border-[var(--line)] p-4 sm:p-5">
+      {requestError && <p role="alert" className="mb-3 rounded-lg border border-amber-500 p-3 text-xs">{requestError}</p>}
       <div role="group" aria-label="Study copilot mode" className="mb-3 flex flex-wrap gap-2">
         {([{ value:"chat", label:"Ask and explain" },{ value:"practice", label:"Practice quiz" },{ value:"revision", label:"7-day revision plan" }] as const).map((item) =>
           <button key={item.value} type="button" aria-pressed={mode===item.value} onClick={() => { setMode(item.value); setQuestion(item.value==="practice" ? "Create practice questions from my published course material." : item.value==="revision" ? "Plan my revision for the coming week." : ""); }} className={"rounded-full border px-3 py-2 text-xs font-semibold transition-colors " + (mode===item.value ? "border-[var(--green)] bg-[var(--green-soft)] text-[var(--green-strong)]" : "border-[var(--line)]")}>{t(item.label)}</button>)}
