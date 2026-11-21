@@ -1,4 +1,5 @@
 "use client";
+import { classLabel } from "@/lib/display";
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -126,7 +127,7 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green)]"><Download size={15}/></div>
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold">{syllabus.title}</div>
-            <div className="mt-1 text-[10px] text-[var(--muted)]">{classroom?.display_name ?? "Class"} · Section {classroom?.section ?? "—"} · {Math.max(1, Math.round(syllabus.file_size / 1024))} KB</div>
+            <div className="mt-1 text-[10px] text-[var(--muted)]">{classLabel(classroom??{})} · {Math.max(1, Math.round(syllabus.file_size / 1024))} KB</div>
             {syllabus.outline_text ? <p className="mt-2 line-clamp-2 text-[10px] leading-5 text-[var(--muted)]">{syllabus.outline_text}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               {syllabus.outline_text&&<AISummarizeButton resourceType="syllabus" resourceId={syllabus.id}/>}
@@ -242,7 +243,7 @@ export function ScheduleManager({ classes, entries, canManage }: { classes: Clas
         return <article key={entry.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--line)] p-4">
           <div className="w-20 text-xs font-semibold">{weekdays[entry.weekday]}</div>
           <div className="w-28 text-xs">{entry.start_time.slice(0, 5)}–{entry.end_time.slice(0, 5)}</div>
-          <div className="min-w-0 flex-[1_1_160px]"><div className="text-xs font-semibold">{classroom?.display_name ?? "Class"} · Section {classroom?.section ?? "—"}</div><div className="mt-1 text-[10px] text-[var(--muted)]">{entry.location || "Location not set"}{entry.notes ? ` · ${entry.notes}` : ""}</div></div>
+          <div className="min-w-0 flex-[1_1_160px]"><div className="text-xs font-semibold">{classLabel(classroom??{})}</div><div className="mt-1 text-[10px] text-[var(--muted)]">{entry.location || "Location not set"}{entry.notes ? ` · ${entry.notes}` : ""}</div></div>
           {canManage ? <button type="button" className="btn-secondary !px-3 !py-2 text-[10px]" onClick={() => void remove(entry.id)}><Trash2 size={13}/>Delete</button> : null}
         </article>;
       })}</div> : <p className="text-xs text-[var(--muted)]">No timetable entries yet.</p>}

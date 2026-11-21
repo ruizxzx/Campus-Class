@@ -37,6 +37,15 @@ export async function GET(request:Request){
      mode==="download"?{download:version.file_name}:undefined);
  if(signError||!signed?.signedUrl)
    return NextResponse.json({error:"Could not authorize a private file link."},{status:503});
+ if(mode==="preview"){
+   const headers:Record<string,string>={};const range=request.headers.get("range");if(range&&/^bytes=\d*-\d*$/.test(range))headers.Range=range;
+   try{const upstream=await fetch(signed.signedUrl,{headers,cache:"no-store",signal:AbortSignal.timeout(30000)});
+     if(!upstream.ok&&upstream.status!==416)return NextResponse.json({error:"PDF preview is unavailable. Use Download file."},{status:502});
+     const output=new Headers({"Content-Type":"application/pdf","Content-Disposition":"inline","Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff","X-Frame-Options":"SAMEORIGIN","Content-Security-Policy":"frame-ancestors 'self'"});
+     for(const name of ["content-range","content-length","accept-ranges"]){const value=upstream.headers.get(name);if(value)output.set(name,value);}
+     return new Response(upstream.body,{status:upstream.status,headers:output});
+   }catch{return NextResponse.json({error:"PDF preview timed out. Use Download file."},{status:504});}
+ }
  const response=NextResponse.redirect(signed.signedUrl,302);
  response.headers.set("Cache-Control","no-store, private");
  return response;

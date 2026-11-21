@@ -23,15 +23,13 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
     ? await classQuery.limit(150)
     : ids.length ? await classQuery.in("id", ids).limit(150) : { data: [], error: null };
   const allowedIds = (classes ?? []).map((item) => item.id);
-  const { data: sessions, error: sessionError } = allowedIds.length
-    ? await db.from("attendance_sessions").select("id,class_id,title,starts_at,expires_at,closed_at")
-        .eq("college_id", collegeId).in("class_id", allowedIds).order("starts_at", { ascending: false }).limit(100)
-    : { data: [], error: null };
+  const history=await Promise.all(allowedIds.map(id=>db.from("attendance_sessions").select("id,class_id,title,starts_at,expires_at,closed_at").eq("college_id",collegeId).eq("class_id",id).order("starts_at",{ascending:false}).limit(100)));
+  const sessions=history.flatMap(r=>r.data??[]);
+  const sessionError=history.find(r=>r.error)?.error;
   const sessionIds = (sessions ?? []).map((item) => item.id);
-  const { data: records, error: recordError } = sessionIds.length
-    ? await db.from("attendance_records").select("id,session_id,class_id,student_id,status,recorded_at")
-        .eq("college_id", collegeId).in("session_id", sessionIds).limit(2000)
-    : { data: [], error: null };
+  const batches=await Promise.all(Array.from({length:Math.ceil(sessionIds.length/25)},(_,i)=>db.from("attendance_records").select("id,session_id,class_id,student_id,status,recorded_at").eq("college_id",collegeId).in("session_id",sessionIds.slice(i*25,i*25+25)).limit(1000)));
+  const records=batches.flatMap(r=>r.data??[]);
+  const recordError=batches.find(r=>r.error)?.error;
   // Faculty rosters are restricted to their assigned classes, even though this
   // query uses the service client to avoid exposing other private profile data.
   const admin = createAdminClient();
