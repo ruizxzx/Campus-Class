@@ -57,7 +57,7 @@ export default async function FacultyProgress({searchParams}:{
         .eq("college_id",profile.college_id).eq("is_published",true)
         .in("module_id",moduleIds).order("id").range(start,start+199);
       if(error)throw new Error("Could not load published lessons.");
-      for(const item of data??[])lessons.push(item.id);
+      for(const item of data??[])lessons.push({id:item.id,title:item.title});
       if((data?.length??0)<200)break;
     }
     total=lessons.length;
@@ -147,7 +147,7 @@ export default async function FacultyProgress({searchParams}:{
             <div className="h-full bg-[var(--green-strong)]" style={{width:(total?Math.round(p.done/total*100):0)+"%"}}/></div></td>
           <td>{total&&p.done===total?"Completed":p.started?"In progress":"Not started"}</td>
           <td>{p.watchedPercent}% average</td>
-          <td>{p.lastActivity?new Date(p.lastActivity).toLocaleString("en-IN"):"—"}</td>
+          <td>{p.lastActivity?new Date(p.lastActivity).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"}):"—"}</td>
           <td>{p.hasCertificate?"Issued":"Pending"}</td>
           {approvalRequired?<td>{p.approved?"Approved":p.done===total&&total>0?
             <CourseApprovalButton courseId={selected.id} studentId={p.id}/>:"Waiting for lessons"}</td>:null}
