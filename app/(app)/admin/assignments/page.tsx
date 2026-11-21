@@ -1,0 +1,6 @@
+import Link from "next/link";
+import {requireRole} from "@/lib/auth";
+import {createAdminClient} from "@/lib/supabase/admin";
+import {PageHeader,EmptyState} from "@/components/ui";
+import {classLabel,istDate} from "@/lib/display";
+export default async function AdminAssignments(){const p=await requireRole(["admin"]);const {data,error}=await createAdminClient().from("assignments").select("id,title,status,due_at,max_marks,classes(display_name,section,subjects(name))").eq("college_id",p.college_id).order("created_at",{ascending:false}).limit(500);if(error)throw new Error("Could not load assignments.");return <><PageHeader title="College assignments" description="Published coursework and drafts across all classes." action={<Link href="/gradebook" className="btn-secondary">Gradebook</Link>}/><section className="surface p-4"><div className="overflow-x-auto"><table className="table-base w-full"><thead><tr><th>Assignment</th><th>Class</th><th>Status</th><th>Due</th><th>Marks</th></tr></thead><tbody>{(data??[]).map(a=><tr key={a.id}><td>{a.title}</td><td>{classLabel((Array.isArray(a.classes)?a.classes[0]:a.classes)??{})}</td><td>{a.status}</td><td>{a.due_at?istDate(a.due_at):"—"}</td><td>{a.max_marks}</td></tr>)}</tbody></table></div>{!data?.length&&<EmptyState title="No assignments" description="Coursework will appear here."/>}</section></>;}

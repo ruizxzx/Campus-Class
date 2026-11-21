@@ -2,7 +2,7 @@ import "server-only";
 import {createAdminClient} from "@/lib/supabase/admin";
 
 export type PublicCertificateCheck={
- number:string;valid:boolean;issued_at:string;college:string;course:string;
+ number:string;valid:boolean;issued_at:string;college:string;course:string;logo?:string|null;template?:string;
 };
 /** Public check returns ONLY a shared certificate's issuing college, course and status. */
 export async function lookupCertificate(number:string):Promise<PublicCertificateCheck|null>{
@@ -23,6 +23,7 @@ export async function lookupCertificate(number:string):Promise<PublicCertificate
  ]);
  if(college.error||course.error||!college.data||!course.data)
   throw new Error("Certificate verification details could not be loaded.");
- return {number:normalized,valid:!cert.revoked_at,issued_at:cert.issued_at,
+ const {data:brand}=await db.from("college_certificate_branding").select("template,logo_data").eq("college_id",cert.college_id).maybeSingle();
+ return {logo:brand?.logo_data??null,template:brand?.template??"classic",number:normalized,valid:!cert.revoked_at,issued_at:cert.issued_at,
   college:college.data.name,course:course.data.title};
 }

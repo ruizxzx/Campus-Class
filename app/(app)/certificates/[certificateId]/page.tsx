@@ -20,14 +20,15 @@ export default async function CertificateDetail({params}:{params:Promise<{certif
     db.from("colleges").select("name").eq("id",profile.college_id).maybeSingle(),
     db.from("courses").select("title").eq("id",cert.course_id).eq("college_id",profile.college_id).maybeSingle(),
   ]);
+  const {data:branding}=await db.from("college_certificate_branding").select("template,logo_data").eq("college_id",profile.college_id).maybeSingle();
   const meta=cert.metadata&&typeof cert.metadata==="object"&&!Array.isArray(cert.metadata)?cert.metadata as Record<string,unknown>:{};
   const studentName=String(meta.student_name??student?.full_name??"Course student");
   const collegeName=String(meta.college_name??college?.name??"College");
   const courseTitle=String(meta.course_title??course?.title??"Course");
   return <main className="mx-auto max-w-4xl p-4 sm:p-8">
     <nav className="mb-5 print:hidden"><Link href={profile.role==="admin"?"/admin/certificates":"/certificates"} className="btn-secondary">Back to certificates</Link> <PrintCertificate/></nav>
-    <article aria-label="College course completion certificate" className="rounded-xl border-[10px] border-double border-emerald-700 bg-white text-[#1a2823] px-8 py-12 sm:px-14 sm:py-20 text-center shadow-xl print:shadow-none">
-      <Award className="text-emerald-700 mx-auto" size={52}/>
+    <article aria-label="College course completion certificate" className={"rounded-xl border-[10px] bg-white text-[#1a2823] px-8 py-12 sm:px-14 sm:py-20 text-center shadow-xl print:shadow-none "+(branding?.template==="modern"?"border-solid border-blue-700":"border-double border-emerald-700")}>
+      {branding?.logo_data?<img src={branding.logo_data} alt="College logo" className="mx-auto h-20 w-auto object-contain"/>:<Award className="text-emerald-700 mx-auto" size={52}/>}
       <div className="mt-6 text-lg font-semibold uppercase tracking-widest">{collegeName}</div>
       <h1 className="mt-10 text-3xl sm:text-5xl font-serif">Certificate of Completion</h1>
       <p className="mt-10 text-base">This certifies that</p>
