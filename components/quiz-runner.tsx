@@ -1,4 +1,5 @@
 "use client";
+import { istDate } from "@/lib/display";
 import { useEffect, useMemo, useState } from "react";
 import { orderQuestions } from "@/lib/quiz-order";
 import { useRouter } from "next/navigation";
@@ -87,7 +88,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
         });
         const result = await response.json().catch(() => null);
         if (!response.ok) throw new Error(result?.error ?? "Autosave failed.");
-        setSavedAt(new Date().toLocaleTimeString());
+        setSavedAt(istDate(new Date(),{hour:"numeric",minute:"2-digit"}));
         setSaveError("");
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : "Autosave failed. Check connection.");

@@ -1,4 +1,5 @@
 "use client";
+import { istDate } from "@/lib/display";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -148,7 +149,7 @@ export function StudentSuccessDashboard({ classId, classes, students, interventi
           {item.action_plan && <p className="mt-2 whitespace-pre-wrap text-xs"><strong>Action plan:</strong> {item.action_plan}</p>}
           {item.follow_up_at && <p className="mt-2 text-xs text-[var(--muted)]">Follow up by {item.follow_up_at}</p>}
           {item.outcome_note && <p className="mt-2 whitespace-pre-wrap text-xs"><strong>Outcome:</strong> {item.outcome_note}</p>}
-          <p className="mt-1 text-[10px] text-[var(--muted)]">{new Date(item.created_at).toLocaleString()}</p>
+          <p className="mt-1 text-[10px] text-[var(--muted)]">{istDate(item.created_at)}</p>
           {item.status !== "resolved" && <div className="mt-3 space-y-2">
             <label className="block text-xs font-semibold">Outcome note
               <textarea className="input-base mt-2 min-h-16" maxLength={3000}

@@ -1,4 +1,5 @@
 "use client";
+import { istDate } from "@/lib/display";
 import { nowEpochMs } from "@/lib/time";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -102,7 +103,7 @@ export function AttendanceWorkspace({ role, classes, sessions, records, roster, 
           {issued && <div className="mt-5 rounded-2xl border border-[var(--line)] bg-white p-4 text-center text-slate-900">
             <div className="mx-auto max-w-[280px] [&_svg]:h-auto [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: issued.qrSvg }}/>
             <div className="mt-3 text-sm font-semibold">{issued.session.title}</div>
-            <p className="mt-1 text-xs">Expires {new Date(issued.session.expires_at).toLocaleTimeString()}</p>
+            <p className="mt-1 text-xs">Expires {istDate(issued.session.expires_at,{hour:"numeric",minute:"2-digit"})}</p>
             <button type="button" className="btn-secondary mt-3" onClick={() => { void navigator.clipboard.writeText(issued.checkinLink).then(() => toast.success("Check-in link copied.")).catch(() => toast.error("Copy failed.")); }}><ClipboardCopy size={15}/> Copy check-in link</button>
             <p className="mt-3 text-xs text-slate-600">Display this code to students. Do not post it publicly.</p>
           </div>}
@@ -122,7 +123,7 @@ export function AttendanceWorkspace({ role, classes, sessions, records, roster, 
             {classSessions.map((session) => {
               const ended = Boolean(session.closed_at) || Date.parse(session.expires_at) < nowEpochMs();
               return <div key={session.id} className="rounded-2xl border border-[var(--line)] p-3 sm:p-4">
-                <div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-sm font-semibold">{session.title}</p><p className="mt-1 text-xs text-[var(--muted)]">{new Date(session.starts_at).toLocaleString()}</p></div><span className={"status-pill " + (ended ? "" : "green")}>{ended ? "Ended" : "Active"}</span></div>
+                <div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-sm font-semibold">{session.title}</p><p className="mt-1 text-xs text-[var(--muted)]">{istDate(session.starts_at)}</p></div><span className={"status-pill " + (ended ? "" : "green")}>{ended ? "Ended" : "Active"}</span></div>
                 <div className="mt-3 text-xs text-[var(--muted)]">{staff ? count(session.id) + " checked in" : (records.some((record) => record.session_id === session.id && ["present","late"].includes(record.status)) ? "You attended" : ended ? "No check-in recorded" : "Awaiting check-in")}</div>
                 {staff && !ended && <button className="btn-secondary mt-3 !py-2" disabled={working} onClick={() => manage({ action: "close", session_id: session.id }, "Session closed.")}><XCircle size={14}/>Close session</button>}
                 {staff && roster.filter((student) => student.class_id === classId).length > 0 && <details className="mt-3 border-t border-[var(--line)] pt-3">
