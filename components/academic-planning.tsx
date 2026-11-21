@@ -137,7 +137,7 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
             const supabase = createClient();
             const { data, error } = await supabase.storage.from("class-syllabi").createSignedUrl(syllabus.storage_path, 300, { download: syllabus.file_name });
             if (error || !data?.signedUrl) toast.error("Could not open this syllabus.");
-            else window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+            else window.location.assign(data.signedUrl);
           }}><Download size={13}/>Open PDF</button>
           {canManage&&<button type="button" className="btn-secondary !px-3 !py-2 text-[10px]"
             disabled={indexingId!==null} onClick={()=>void indexPdf(syllabus.id)}>
