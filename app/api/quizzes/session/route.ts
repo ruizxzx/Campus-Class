@@ -62,7 +62,9 @@ export async function POST(request: Request) {
     });
     if (insertError && insertError.code !== "23505") {
       console.error("Quiz session insert failed", { code: insertError.code });
-      return NextResponse.json({ error: "Could not start quiz attempt." }, { status: 503 });
+      return NextResponse.json({ error: insertError.code === "42501"
+        ? "Quiz session could not be created because database permission checks failed. Ask your administrator to verify SQL patches 027, 029 and 053."
+        : "Could not start quiz attempt. Reference: " + (insertError.code ?? "unknown") }, { status: 503 });
     }
     const loaded = await filter().maybeSingle();
     session = loaded.data;
