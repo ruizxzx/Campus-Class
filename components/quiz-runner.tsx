@@ -45,6 +45,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
     if (!isOpen || attemptsRemaining <= 0 || !questions.length) return;
     let cancelled = false;
     setSessionReady(false);
+    setSessionError("");
     async function start() {
       try {
         const response = await fetch("/api/quizzes/session", {
@@ -197,7 +198,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
           <div className="h-full rounded-full bg-[var(--green-strong)] transition-[width] duration-150" style={{ width: `${progress}%` }} />
         </div>
       </section>
-      {orderedQuestions.map((q, idx) => {
+      <fieldset disabled={!sessionReady||submitting||secondsLeft===0} className="space-y-4">{orderedQuestions.map((q, idx) => {
         const rawOptions = Array.isArray(q.options) ? q.options : [];
         const currentAnswer = answers[q.id];
         const selectedValues = Array.isArray(currentAnswer) ? currentAnswer : [];
@@ -293,13 +294,13 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
             )}
           </article>
         );
-      })}
+      })}</fieldset>
 
       <div className="surface-flat flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <span className="text-[11px] text-[var(--muted)]">Review your answers before submitting.</span>
         <button
           type="submit"
-          disabled={submitting || !sessionReady || (secondsLeft === 0)}
+          disabled={submitting || !sessionReady || secondsLeft === 0 || answeredCount===0}
           className="btn-primary !px-6 !py-3 font-semibold"
         >
           <Send size={15} />

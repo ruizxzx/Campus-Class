@@ -1,11 +1,12 @@
 "use client";
+import {classLabel} from "@/lib/display";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { FileUp, Loader2 } from "lucide-react";
 
-type Classroom={id:string;display_name:string|null;section:string;semester:number|null};
+type Classroom={id:string;display_name:string|null;section:string;semester:number|null;subjects?:{name:string}|{name:string}[]|null};
 type Pending={files:File[];items:{material_id:string;version_id:string;path:string;token:string;name:string}[];completed:Set<number>};
 const types:Record<string,string>={
  ".pdf":"application/pdf",".txt":"text/plain",
@@ -85,7 +86,7 @@ export function LibraryUploadForm({classes,replaceMaterialId}:{
    {!replaceMaterialId?<div className="grid gap-3 sm:grid-cols-2">
      <label className="text-xs font-semibold">Class
        <select required className="input-base mt-1 w-full" value={classId} disabled={busy||hasPending}
-         onChange={e=>setClassId(e.target.value)}>{classes.map(c=><option key={c.id} value={c.id}>{c.display_name??"Class"} · {c.section}</option>)}</select>
+         onChange={e=>setClassId(e.target.value)}>{classes.map(c=><option key={c.id} value={c.id}>{classLabel(c)}</option>)}</select>
      </label>
      <label className="text-xs font-semibold">Semester (optional)
        <input className="input-base mt-1 w-full" type="number" min="1" max="12" value={semester}

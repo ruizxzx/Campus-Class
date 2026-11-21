@@ -1,4 +1,5 @@
 "use client";
+import {classLabel} from "@/lib/display";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -220,7 +221,7 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
               <label className="block text-xs font-semibold">Classroom
                 <select className={`${input} mt-2`} required value={stream.classId} onChange={(event) => { setStream({ ...stream, classId: event.target.value }); setStudentIds([]); }}>
                   <option value="">Choose a classroom</option>
-                  {classes.map((item) => <option key={item.id} value={item.id}>{item.display_name} · {item.section}</option>)}
+                  {classes.map((item) => <option key={item.id} value={item.id}>{classLabel(item)}</option>)}
                 </select>
               </label>
               <label className="block text-xs font-semibold">Post type

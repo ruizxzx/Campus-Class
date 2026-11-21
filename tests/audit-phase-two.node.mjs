@@ -1,0 +1,13 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {markdownBlocks,inlineMarkdown} from "../lib/markdown-text.ts";
+import {classLabel,displayName,istDateInput,istInputToISOString,istDate} from "../lib/display.ts";
+import {summarizeStudent} from "../lib/student-success.ts";
+const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
+test("academic dates round trip through IST deadline inputs",()=>{assert.equal(istDateInput("2026-11-21T18:29:00Z"),"2026-11-21T23:59");assert.equal(istInputToISOString("2026-11-21T23:59"),"2026-11-21T18:29:00.000Z");assert.match(istDate("2026-11-20T21:47:00Z"),/21 Nov 2026/);});
+test("class labels prioritize subject name and preserve section",()=>{assert.equal(classLabel({display_name:"",section:"A",subjects:[{name:"DATA STRUCTURES"}]}),"DATA STRUCTURES · A");assert.equal(displayName("STUDENTTESTING 1"),"Studenttesting 1");});
+test("Markdown bold and headings are parsed as safe plain-text tokens",()=>{assert.deepEqual(inlineMarkdown("**Arrays:** <script>bad</script>"),[{kind:"bold",text:"Arrays:"},{kind:"text",text:" <script>bad</script>"}]);assert.deepEqual(markdownBlocks("# Test\n- Point"),[{kind:"heading",text:"Test"},{kind:"bullet",text:"Point"}]);assert.doesNotMatch(read("components/ai-markdown.tsx"),/dangerouslySetInnerHTML/);});
+test("partial evidence cannot classify a zero activity learner as on track",()=>{assert.equal(summarizeStudent({attendanceSessions:1,attendedSessions:0,assignedWork:5,submittedWork:0,overdueWork:0,releasedQuizScores:[]}).level,"insufficient_data");});
+test("private PDF preview streams same-origin while downloads remain authorized",()=>{const route=read("app/api/library/files/route.ts");assert.match(route,/libraryClassAccess/);assert.match(route,/Content-Disposition":"inline"/);assert.match(route,/new Response\(upstream.body/);assert.match(route,/NextResponse.redirect/);});
+test("new academic admin mutations reject non-admin before database access",()=>{const route=read("app/api/admin/academic-management/route.ts");assert.ok(route.indexOf('actor.profile.role!=="admin"')<route.indexOf("const b=parsed.data,db=createAdminClient"));assert.match(route,/status:403/);const sql=read("supabase/migrations/202611210054_admin_academic_management.sql");assert.match(sql,/enable row level security/);assert.match(sql,/from public,anon,authenticated/);assert.doesNotMatch(sql,/drop table|truncate table|disable row level security/i);});
