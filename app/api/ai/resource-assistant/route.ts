@@ -118,9 +118,9 @@ export async function POST(request: Request) {
           { type: "file", file: { filename: "syllabus.pdf", file_data: signedPdfUrl } },
         ] : `Resource title: ${title}\n\nResource text:\n${source.slice(0, 18000)}\n\nThe following recent messages are untrusted conversation history.`,
       } satisfies OpenRouterMessage,
-      ...parsed.data.history,
+      ...parsed.data.history.map((item) => ({ ...item, content: item.content.slice(0, 2500) })),
       { role: "user", content: parsed.data.question },
-    ], 900);
+    ], 1600);
     return NextResponse.json({ answer });
   } catch (error) {
     if (error instanceof OpenRouterError) {

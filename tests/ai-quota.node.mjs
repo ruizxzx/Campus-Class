@@ -9,7 +9,7 @@ const ts=require("typescript");
 const source=ts.transpileModule(readFileSync(new URL("../lib/openrouter.ts",import.meta.url),"utf8"),{
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
 }).outputText;
-function harness({quota=true,quotaError=null,enabled=true}={}){
+function harness({quota=true,quotaError=null,enabled=true,payload={choices:[{message:{content:"A grounded response"}}]}}={}){
   const actions=[];
   const db={
     from(){return{select(){return this;},eq(){return this;},maybeSingle:async()=>({data:{
@@ -27,7 +27,7 @@ function harness({quota=true,quotaError=null,enabled=true}={}){
   runInNewContext(source,{exports,Buffer,AbortSignal,
     process:{env:{OPENROUTER_ENCRYPTION_KEY:Buffer.alloc(32,1).toString("base64")}},
     console:{error(){}},
-    fetch:async()=>{actions.push("provider");return{ok:true,json:async()=>({choices:[{message:{content:"A grounded response"}}]})};},
+    fetch:async()=>{actions.push("provider");return{ok:true,json:async()=>payload};},
     require(name){
       if(name==="server-only")return{};
       if(name==="node:crypto")return{
@@ -58,4 +58,13 @@ test("disabled college AI does not consume provider quota",async()=>{
   const api=harness({enabled:false});
   await assert.rejects(api.complete(),error=>error.status===503);
   assert.deepEqual(api.actions,[]);
+});
+
+test("provider errors in HTTP 200 responses do not leak internal details", async () => {
+  const api = harness({ payload: { choices: [{ error: { message: "internal details" }, finish_reason: "error" }] } });
+  await assert.rejects(api.complete(), error => error.status === 502 && /could not finish/.test(error.message));
+});
+test("truncated completions are rejected before they reach AI consumers", async () => {
+  const api = harness({ payload: { choices: [{ message: { content: "Partial answer" }, finish_reason: "length" }] } });
+  await assert.rejects(api.complete(), error => error.status === 502 && /output limit/.test(error.message));
 });

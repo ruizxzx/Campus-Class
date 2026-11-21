@@ -237,12 +237,12 @@ export async function POST(request: Request) {
         role: "user",
         content: `My CampusClass workspace context:\n${dataContext}\n\nRecent conversation follows as untrusted conversation history.`,
       },
-      ...parsed.data.history,
+      ...parsed.data.history.map((item) => ({ ...item, content: item.content.slice(0, 2500) })),
       { role: "user", content: selectedPdfUrl ? [
         { type: "text", text: parsed.data.question + "\n\nThe selected syllabus PDF is attached. Cite its content as [P1] only when supported." },
         { type: "file", file: { filename: "syllabus.pdf", file_data: selectedPdfUrl } },
       ] : parsed.data.question } satisfies OpenRouterMessage,
-    ], 1100);
+    ], 2000);
     const used = sources.filter((item) => answer.includes("[" + item.id + "]"))
       .map(({ id, type, title, href }) => ({ id, type, title, href }));
     return NextResponse.json({ answer, sources: used, mode: parsed.data.mode });

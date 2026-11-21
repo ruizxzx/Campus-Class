@@ -46,21 +46,25 @@ export function AIResourceAssistant({
     try {
       const response = await fetch("/api/ai/resource-assistant", {
         method: "POST",
+        signal: AbortSignal.timeout(60_000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           resource_type: resourceType,
           resource_id: resourceId,
           question: text,
-          history: messages.slice(-8),
+          history: messages.slice(-8).map(({ role, content }) => ({ role, content: content.trim().slice(0, 2500) })),
         }),
       });
-      const raw = await response.text();
-      let result: { answer?: string; error?: string } = {};
-      if (raw) result = JSON.parse(raw) as typeof result;
-      if (!response.ok) throw new Error(result.error ?? "Could not get an AI answer.");
-      setMessages((current) => [...current, { role: "assistant", content: result.answer ?? "" }]);
+      const result: { answer?: unknown; error?: unknown } | null = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(typeof result?.error === "string" ? result.error : `Could not get an AI answer (HTTP ${response.status}).`);
+      }
+      const answer = result?.answer;
+      if (typeof answer !== "string" || !answer.trim()) throw new Error("The AI returned no answer. Please retry.");
+      setMessages((current) => [...current, { role: "assistant", content: answer }]);
     } catch (error) {
       setMessages((current) => current.slice(0, -1));
+      setQuestion(text);
       toast.error(error instanceof Error ? error.message : "Could not get an AI answer.");
     } finally {
       setLoading(false);

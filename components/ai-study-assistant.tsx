@@ -35,7 +35,7 @@ export function AIStudyAssistant({ syllabi, notes }: {
     event.preventDefault();
     const text = question.trim();
     if (!text || sending) return;
-    const history = messages.slice(-8).map(({ role, content }) => ({ role, content }));
+    const history = messages.slice(-8).map(({ role, content }) => ({ role, content: content.trim().slice(0, 2500) }));
     setMessages((current) => [...current, { role: "user", content: text }]);
     setQuestion("");
     setSending(true);

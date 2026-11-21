@@ -182,6 +182,9 @@ export async function completeWithOpenRouter(
 
   if (!response.ok) {
     console.error("OpenRouter returned an error", { status: response.status });
+    if ([401, 402, 403, 404].includes(response.status)) {
+      throw new OpenRouterError("The AI provider rejected the request. Ask your college administrator to check the API key, credits and model in AI Settings.", 503);
+    }
     throw new OpenRouterError(
       response.status === 429
         ? "The college AI service is busy. Please try again shortly."
@@ -190,12 +193,31 @@ export async function completeWithOpenRouter(
     );
   }
 
-  const payload: unknown = await response.json().catch(() => null);
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    if (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)) {
+      throw new OpenRouterError("The AI response timed out. Please try again.", 504);
+    }
+    throw new OpenRouterError("The AI provider returned an unreadable response. Please try again.", 502);
+  }
   if (!payload || typeof payload !== "object" || !("choices" in payload)) {
     throw new OpenRouterError("The AI service returned an invalid response.", 502);
   }
-  const choices = (payload as { choices?: { message?: { content?: unknown } }[] }).choices;
-  const content = choices?.[0]?.message?.content;
+  const choice = (Array.isArray(payload.choices) ? payload.choices[0] : undefined) as {
+    error?: unknown;
+    finish_reason?: unknown;
+    message?: { content?: unknown };
+  } | undefined;
+  if (choice?.error || choice?.finish_reason === "error" || ("error" in payload && payload.error)) {
+    console.error("OpenRouter completion failed after a successful HTTP response");
+    throw new OpenRouterError("The AI provider could not finish the response. Please try again.", 502);
+  }
+  if (choice?.finish_reason === "length") {
+    throw new OpenRouterError("The AI response reached its output limit. Try asking for a shorter answer.", 502);
+  }
+  const content = choice?.message?.content;
   if (typeof content !== "string" || !content.trim()) {
     throw new OpenRouterError("The AI service returned an empty response.", 502);
   }
