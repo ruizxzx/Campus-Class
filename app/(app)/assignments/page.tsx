@@ -1,7 +1,9 @@
+import { istDate } from "@/lib/display";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader, EmptyState } from "@/components/ui";
+import { assignmentState, latestSubmissions } from "@/lib/assignment-work-state";
 import { FileText, Clock3, ArrowUpRight } from "lucide-react";
 
 export default async function StudentAssignmentsPage({
@@ -13,16 +15,18 @@ export default async function StudentAssignmentsPage({
   const supabase = await createClient();
   const { class: classId } = await searchParams;
   const validClassId = classId && /^[0-9a-f-]{36}$/i.test(classId) ? classId : null;
-  let assignmentsQuery = supabase.from("assignments")
+  const {data: memberships,error: membershipError} = await supabase.from("class_enrollments").select("class_id").eq("college_id",profile.college_id).eq("student_id",profile.id).eq("status","active");
+  if (membershipError) throw new Error("Unable to load your classes.");
+  const classIds = (memberships ?? []).map(row=>row.class_id).filter(id=>!validClassId || id===validClassId);
+  const assignmentsQuery = supabase.from("assignments")
     .select("id,title,description,due_at,max_marks,class_id,classes(section,subjects(name,code))")
     .eq("college_id", profile.college_id)
     .eq("status", "published")
     .eq("work_type", "assignment")
     .order("due_at", { ascending: true });
-  if (validClassId) assignmentsQuery = assignmentsQuery.eq("class_id", validClassId);
   const [assignmentResult, submissionResult] = await Promise.all([
-    assignmentsQuery,
-    supabase.from("assignment_submissions").select("id,assignment_id,status").eq("student_id", profile.id),
+    classIds.length ? assignmentsQuery.in("class_id",classIds) : Promise.resolve({data:[],error:null}),
+    supabase.from("assignment_submissions").select("id,assignment_id,status,version").eq("college_id",profile.college_id).eq("student_id", profile.id),
   ]);
   if (assignmentResult.error) {
     console.error("Unable to load class assignments", assignmentResult.error);
@@ -33,13 +37,9 @@ export default async function StudentAssignmentsPage({
     throw new Error("Unable to load submitted work.");
   }
   const assignments = (assignmentResult.data as any[]) ?? [];
-  const submitted = new Map((submissionResult.data ?? []).map((submission) => [submission.assignment_id, submission.status]));
-  const pendingAssignments = assignments.filter((assignment) => (
-    !submitted.has(assignment.id) || submitted.get(assignment.id) === "late"
-  ));
-  const submittedAssignments = assignments.filter((assignment) => (
-    submitted.has(assignment.id) && submitted.get(assignment.id) !== "late"
-  ));
+  const submitted = latestSubmissions(submissionResult.data ?? []);
+  const pendingAssignments = assignments.filter(assignment=>assignmentState(assignment,submitted)!=="completed");
+  const submittedAssignments = assignments.filter(assignment=>assignmentState(assignment,submitted)==="completed");
 
   return (
     <>
@@ -54,7 +54,7 @@ export default async function StudentAssignmentsPage({
             </div>
             <div className="text-right">
               <div className="flex items-center justify-end gap-1 text-xs font-semibold">
-                <Clock3 size={13} />{assignment.due_at ? new Date(assignment.due_at).toLocaleString() : "No deadline"}
+                <Clock3 size={13} />{assignment.due_at ? istDate(assignment.due_at) : "No deadline"}
               </div>
               <div className="mt-1 text-[10px] text-[var(--muted)]">{assignment.max_marks} marks</div>
             </div>
@@ -72,7 +72,7 @@ export default async function StudentAssignmentsPage({
               <div className="text-xs font-semibold">{assignment.title}</div>
               <div className="mt-1 text-[10px] text-[var(--muted)]">{assignment.classes?.subjects?.name ?? "Class"}</div>
             </div>
-            <span className="status-pill green">Submitted</span>
+            <span className="status-pill green">{submitted.get(assignment.id)?.status === "late" ? "Submitted late" : "Submitted"}</span>
           </Link>
         )) : <p className="text-xs text-[var(--muted)]">No completed submissions yet.</p>}
       </section>

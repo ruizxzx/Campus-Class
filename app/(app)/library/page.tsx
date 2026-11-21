@@ -1,3 +1,4 @@
+import { classLabel } from "@/lib/display";
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -66,7 +67,7 @@ export default async function StudyLibraryPage({searchParams}:{
      [item.title,item.description,item.unit_title,item.chapter_title].some(v=>v.toLowerCase().includes(normalized))||
      matchingText.has(item.id));
  }
- const names=new Map(classes.map(c=>[c.id,(c.display_name??"Class")+" · "+c.section]));
+ const names=new Map(classes.map(c=>[c.id,classLabel(c)]));
  return <>
    <LearningHubHeader active="library" title="Digital study library"
      description="Find class textbooks, lecture notes and resource files. Save your reading position and study with verified document AI."

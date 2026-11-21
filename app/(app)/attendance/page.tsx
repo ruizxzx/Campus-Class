@@ -1,3 +1,4 @@
+import {collectEvidence} from "@/lib/academic-evidence";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -23,15 +24,13 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
     ? await classQuery.limit(150)
     : ids.length ? await classQuery.in("id", ids).limit(150) : { data: [], error: null };
   const allowedIds = (classes ?? []).map((item) => item.id);
-  const { data: sessions, error: sessionError } = allowedIds.length
-    ? await db.from("attendance_sessions").select("id,class_id,title,starts_at,expires_at,closed_at")
-        .eq("college_id", collegeId).in("class_id", allowedIds).order("starts_at", { ascending: false }).limit(100)
-    : { data: [], error: null };
+  const history=await collectEvidence<{id:string;class_id:string;title:string;starts_at:string;expires_at:string;closed_at:string|null}>(allowedIds,async(batch,from,to)=>db.from("attendance_sessions").select("id,class_id,title,starts_at,expires_at,closed_at").eq("college_id",collegeId).in("class_id",batch).order("starts_at",{ascending:false}).order("id").range(from,to));
+  const sessions=history.data;
+  const sessionError=history.error||history.truncated;
   const sessionIds = (sessions ?? []).map((item) => item.id);
-  const { data: records, error: recordError } = sessionIds.length
-    ? await db.from("attendance_records").select("id,session_id,class_id,student_id,status,recorded_at")
-        .eq("college_id", collegeId).in("session_id", sessionIds).limit(2000)
-    : { data: [], error: null };
+  const attendance=await collectEvidence<{id:string;session_id:string;class_id:string;student_id:string;status:string;recorded_at:string}>(sessionIds,async(batch,from,to)=>db.from("attendance_records").select("id,session_id,class_id,student_id,status,recorded_at").eq("college_id",collegeId).in("session_id",batch).order("id").range(from,to));
+  const records=attendance.data;
+  const recordError=attendance.error||attendance.truncated;
   // Faculty rosters are restricted to their assigned classes, even though this
   // query uses the service client to avoid exposing other private profile data.
   const admin = createAdminClient();

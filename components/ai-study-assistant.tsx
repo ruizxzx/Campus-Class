@@ -1,4 +1,5 @@
 "use client";
+import {AIMarkdown} from "@/components/ai-markdown";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -25,6 +26,7 @@ export function AIStudyAssistant({ syllabi, notes }: {
   const t=(label:string)=>translateUi(label,language);
   const [question, setQuestion] = useState("");
   const [sending, setSending] = useState(false);
+  const [requestError, setRequestError] = useState("");
   const [mode, setMode] = useState<"chat" | "practice" | "revision">("chat");
   const [syllabusId, setSyllabusId] = useState("");
   const [noteId, setNoteId] = useState("");
@@ -37,19 +39,26 @@ export function AIStudyAssistant({ syllabi, notes }: {
     setMessages((current) => [...current, { role: "user", content: text }]);
     setQuestion("");
     setSending(true);
+    setRequestError("");
     try {
       const response = await fetch("/api/ai/study-assistant", {
         method: "POST",
+        signal: AbortSignal.timeout(60_000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: text, history, mode, syllabus_id: syllabusId || null, note_id: noteId || null }),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "The study assistant could not answer.");
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error ?? `The study assistant could not answer (HTTP ${response.status}).`);
+      if (typeof result?.answer !== "string" || !result.answer.trim()) throw new Error("The AI returned no answer. Please retry.");
       setMessages((current) => [...current, { role: "assistant", content: result.answer, sources: result.sources ?? [] }]);
     } catch (error) {
       setMessages((current) => current.filter((message, index) => !(index === current.length - 1 && message.role === "user" && message.content === text)));
       setQuestion(text);
-      toast.error(error instanceof Error ? error.message : "The study assistant could not answer.");
+      const message = error instanceof Error && error.name === "TimeoutError"
+        ? "The study assistant timed out. Your question was restored; please retry."
+        : error instanceof Error ? error.message : "The study assistant could not answer.";
+      setRequestError(message);
+      toast.error(message);
     } finally {
       setSending(false);
     }
@@ -70,7 +79,7 @@ export function AIStudyAssistant({ syllabi, notes }: {
         <div className="mt-5 flex flex-wrap justify-center gap-2">{suggestedQuestions.map((item) => <button key={item} type="button" onClick={() => setQuestion(t(item))} className="btn-secondary !rounded-full !px-3 !py-2 text-[10px]">{t(item)}</button>)}</div>
       </div> : messages.map((message, index) => <div key={`${index}-${message.role}`} className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "ml-auto bg-[var(--green-soft)]" : "bg-[var(--surface-2)]"}`}>
         <div className="mb-1 text-[9px] font-bold uppercase tracking-[.12em] text-[var(--muted)]">{message.role === "user" ? t("You") : "CampusClass AI"}</div>
-        <p className="whitespace-pre-wrap">{message.content}</p>
+        {message.role==="assistant"?<AIMarkdown value={message.content}/>:<p className="whitespace-pre-wrap break-words">{message.content}</p>}
         {message.sources?.length ? <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--line)] pt-3" aria-label="Referenced course sources">
           {message.sources.map((source) => <Link key={source.id} href={source.href} className="rounded-full border border-[var(--line)] px-2 py-1 text-[10px] font-semibold hover:text-[var(--green)]" title={source.type + ": " + source.title}>[{source.id}] {source.title}</Link>)}
         </div> : null}
@@ -79,6 +88,7 @@ export function AIStudyAssistant({ syllabi, notes }: {
     </div>
 
     <form onSubmit={ask} className="border-t border-[var(--line)] p-4 sm:p-5">
+      {requestError && <p role="alert" className="mb-3 rounded-lg border border-amber-500 p-3 text-xs">{requestError}</p>}
       <div role="group" aria-label="Study copilot mode" className="mb-3 flex flex-wrap gap-2">
         {([{ value:"chat", label:"Ask and explain" },{ value:"practice", label:"Practice quiz" },{ value:"revision", label:"7-day revision plan" }] as const).map((item) =>
           <button key={item.value} type="button" aria-pressed={mode===item.value} onClick={() => { setMode(item.value); setQuestion(item.value==="practice" ? "Create practice questions from my published course material." : item.value==="revision" ? "Plan my revision for the coming week." : ""); }} className={"rounded-full border px-3 py-2 text-xs font-semibold transition-colors " + (mode===item.value ? "border-[var(--green)] bg-[var(--green-soft)] text-[var(--green-strong)]" : "border-[var(--line)]")}>{t(item.label)}</button>)}

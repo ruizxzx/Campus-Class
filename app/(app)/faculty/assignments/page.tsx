@@ -1,3 +1,4 @@
+import { istDate } from "@/lib/display";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -41,7 +42,7 @@ export default async function FacultyAssignmentsPage({
                 <tr key={assignment.id}>
                   <td><Link href={`/faculty/assignments/${assignment.id}`} className="font-semibold hover:text-[var(--green)]">{assignment.title}</Link></td>
                   <td>{assignment.classes?.subjects?.name ?? "Class"} · {assignment.classes?.section ?? "—"}</td>
-                  <td>{assignment.due_at ? new Date(assignment.due_at).toLocaleString() : "No deadline"}</td>
+                  <td>{assignment.due_at ? istDate(assignment.due_at) : "No deadline"}</td>
                   <td>{assignment.max_marks}</td>
                   <td><span className={`status-pill ${assignment.status === "published" ? "green" : ""}`}>{assignment.status}</span></td>
                 </tr>

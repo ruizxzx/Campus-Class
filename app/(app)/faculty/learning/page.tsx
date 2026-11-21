@@ -16,21 +16,21 @@ export default async function FacultyLearningPage({ searchParams }: { searchPara
       .eq("faculty_id", profile.id);
     const classIds = (facultyRelations ?? []).map((relation) => relation.class_id);
     classResult = classIds.length
-      ? await db.from("classes").select("id,display_name,section,subjects(id,name,code)").eq("college_id", profile.college_id).in("id", classIds).order("display_name")
+      ? await db.from("classes").select("id,display_name,section,subjects(id,name,code)").eq("college_id", profile.college_id).eq("is_active",true).in("id", classIds).order("display_name")
       : { data: [], error: null };
   } else {
     classResult = await db.from("classes").select("id,display_name,section,subjects(id,name,code)").eq("college_id", profile.college_id).order("display_name");
   }
-  const [subjectResult] = await Promise.all([
-    db.from("subjects").select("id,name,code").eq("college_id", profile.college_id).order("name"),
-  ]);
+  const eligible=[...new Set((classResult.data??[]).flatMap(c=>(Array.isArray(c.subjects)?c.subjects:c.subjects?[c.subjects]:[]).map(x=>x.id)))];
+  const subjectQuery=db.from("subjects").select("id,name,code").eq("college_id",profile.college_id).eq("is_active",true).order("name");
+  const subjectResult=profile.role==="admin"?await subjectQuery:eligible.length?await subjectQuery.in("id",eligible):{data:[],error:null};
   if (classResult.error) throw new Error("Unable to load assigned classrooms.");
   if (subjectResult.error) throw new Error("Unable to load college subjects.");
 
   const classRows = classResult.data ?? [];
   const classIds = classRows.map((classroom) => classroom.id);
   const enrollmentResult = classIds.length
-    ? await db.from("class_enrollments").select("class_id,student_id").in("class_id", classIds).eq("status", "active")
+    ? await db.from("class_enrollments").select("class_id,student_id").eq("college_id",profile.college_id).in("class_id", classIds).eq("status", "active")
     : { data: [], error: null };
   if (enrollmentResult.error) throw new Error("Unable to load active classroom rosters.");
   const enrollmentRows = enrollmentResult.data ?? [];

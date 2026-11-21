@@ -129,7 +129,9 @@ export default async function GradebookPage({ searchParams }: { searchParams: Pr
     ...(quizResult.data ?? []).map((item) => ({ key: "quiz:" + item.id, title: item.title, type: "quiz", maxMarks: Number(item.max_marks) })),
   ];
   const completedSessions = new Set((sessionsResult.data ?? []).filter((item) => item.closed_at || Date.parse(item.expires_at) <= nowEpochMs()).map((item) => item.id));
-  const people = (profilesResult.data ?? []).map((person) => {
+  const peopleById=new Map((profilesResult.data??[]).map(p=>[p.id,p]));
+  if(ids.some(id=>!peopleById.has(id))){academicLog("gradebook.roster",{code:"INCOMPLETE"});return <><PageHeader title="Academic gradebook" description="Published coursework and released grades."/><AcademicDataState area="Gradebook" issue="incomplete" admin={profile.role==="admin"}/></>;}
+  const people = ids.map(id=>peopleById.get(id)!).map((person) => {
     const scores = columns.map((column) => {
       const resourceId = column.key.split(":")[1];
       if (column.key.startsWith("assignment:")) {

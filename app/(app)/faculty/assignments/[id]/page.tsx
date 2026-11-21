@@ -1,3 +1,4 @@
+import { istDate } from "@/lib/display";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
@@ -55,7 +56,7 @@ export default async function FacultyAssignmentDetailPage({ params }: { params: 
   return <>
     <PageHeader
       title={assignment.title}
-      description={`Maximum marks: ${assignment.max_marks} · ${assignment.due_at ? `Due ${new Date(assignment.due_at).toLocaleString()}` : "No deadline"}`}
+      description={`Maximum marks: ${assignment.max_marks} · ${assignment.due_at ? `Due ${istDate(assignment.due_at)}` : "No deadline"}`}
       action={<Link href="/faculty/submissions" className="btn-secondary">All submissions</Link>}
     />
     {canEdit && <AssignmentEditor assignment={assignment} />}

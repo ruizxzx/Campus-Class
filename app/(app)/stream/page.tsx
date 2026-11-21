@@ -1,3 +1,5 @@
+import { scopedClasses } from "@/lib/class-scope";
+import { classLabel } from "@/lib/display";
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -52,11 +54,8 @@ export default async function StreamPage({
   const selectedType = postTypes.find((type) => type === filters.type);
   const classId = filters.class && /^[0-9a-f-]{36}$/i.test(filters.class) ? filters.class : null;
   const page = Math.max(1, Number.parseInt(filters.page ?? "1", 10) || 1);
-  const classResult = await supabase.from("classes")
-    .select("id,display_name,section")
-    .eq("college_id", profile.college_id)
-    .order("display_name");
-  if (classResult.error) throw new Error("Unable to load accessible classrooms.");
+  const classes = await scopedClasses(profile);
+  const ids=classes.map(c=>c.id).filter(id=>!classId||id===classId);
 
   let query = supabase.from("class_stream_posts")
     .select("id,title,body,post_type,published_at,pinned_at,classes(display_name,section,subjects(name,code)),class_topics(name),stream_attachments(id,file_name,storage_path,mime_type,file_size)")
@@ -66,9 +65,9 @@ export default async function StreamPage({
     .order("pinned_at", { ascending: false, nullsFirst: false })
     .order("published_at", { ascending: false })
     .range((page - 1) * pageSize, page * pageSize);
-  if (classId) query = query.eq("class_id", classId);
+  query=query.eq("college_id",profile.college_id);
   if (selectedType) query = query.eq("post_type", selectedType);
-  const { data: postRows, error } = await query;
+  const { data: postRows, error } = ids.length?await query.in("class_id",ids):{data:[],error:null};
   if (error) {
     console.error("Unable to load class stream", error);
     throw new Error("Unable to load the class stream.");
@@ -127,8 +126,8 @@ export default async function StreamPage({
           <label className="sr-only" htmlFor="stream-class-filter">Filter by class</label>
           <select id="stream-class-filter" name="class" defaultValue={classId ?? ""} className="input-base min-w-0 sm:w-56">
             <option value="">All accessible classes</option>
-            {(classResult.data ?? []).map((classroom) => (
-              <option key={classroom.id} value={classroom.id}>{classroom.display_name} · {classroom.section}</option>
+            {classes.map((classroom) => (
+              <option key={classroom.id} value={classroom.id}>{classLabel(classroom)}</option>
             ))}
           </select>
           <label className="sr-only" htmlFor="stream-type-filter">Filter by post type</label>
@@ -146,7 +145,7 @@ export default async function StreamPage({
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-3.5 sm:px-6">
               <div className="flex min-w-0 flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[.1em] text-[var(--muted)]">
                 <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green-strong)]"><RadioTower size={14} /></span>
-                <span>{post.classroom?.display_name ?? "Class"}{post.classroom?.section ? ` · ${post.classroom.section}` : ""}</span>
+                <span>{classLabel(post.classroom??{})}</span>
                 <span className="text-[var(--line)]" aria-hidden="true">/</span>
                 <span>{post.post_type.replaceAll("_", " ")}</span>
               </div>

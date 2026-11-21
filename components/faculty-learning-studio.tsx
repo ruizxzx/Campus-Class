@@ -1,4 +1,5 @@
 "use client";
+import {classLabel} from "@/lib/display";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -33,6 +34,7 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
   const [pinned, setPinned] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [course, setCourse] = useState({ subjectId: "", title: "", description: "" });
+  const [courseError, setCourseError] = useState("");
   const [chapters, setChapters] = useState<CourseChapterDraft[]>([
     {
       id: crypto.randomUUID(),
@@ -142,67 +144,32 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
 
   async function saveCourse(event: React.FormEvent) {
     event.preventDefault();
-    setBusy(true);
-    if (!chapters.length || chapters.some((chapter) => !chapter.title.trim() || !chapter.lessons.length || chapter.lessons.some((lesson) => !lesson.title.trim()))) {
-      toast.error("Add a title for every chapter and lecture.");
-      setBusy(false);
+    if (busy) return;
+    if (!course.subjectId || !course.title.trim() || !chapters.length ||
+      chapters.some((chapter) => !chapter.title.trim() || !chapter.lessons.length ||
+        chapter.lessons.some((lesson) => !lesson.title.trim()))) {
+      toast.error("Choose a subject and add a title for the course, every chapter and every lecture.");
       return;
     }
-    const db = createClient();
-    const { data: user } = await db.auth.getUser();
-    const { data: profile } = user.user
-      ? await db.from("profiles").select("college_id").eq("id", user.user.id).single()
-      : { data: null };
-    const { data: created, error } = await db.from("courses").insert({
-      college_id: profile?.college_id,
-      subject_id: course.subjectId,
-      title: course.title.trim(),
-      description: course.description.trim(),
-      status: "archived",
-    }).select("id").single();
-    let failure = error;
-    if (!failure && created) {
-      for (let modulePosition = 0; modulePosition < chapters.length && !failure; modulePosition += 1) {
-        const chapter = chapters[modulePosition];
-        const { data: module, error: moduleError } = await db.from("course_modules").insert({
-          college_id: profile?.college_id,
-          course_id: created.id,
-          title: chapter.title.trim(),
-          description: null,
-          position: modulePosition,
-        }).select("id").single();
-        failure = moduleError;
-        if (!failure && module) {
-          const lessonRows = chapter.lessons.map((lesson, lessonPosition) => ({
-            college_id: profile?.college_id,
-            module_id: module.id,
-            title: lesson.title.trim(),
-            plain_text: lesson.content.trim(),
-            video_url: lesson.video.trim() || null,
-            is_published: true,
-            position: lessonPosition,
-          }));
-          const { error: lessonError } = await db.from("course_lessons").insert(lessonRows);
-          failure = lessonError;
-        }
-      }
-      if (!failure) {
-        const { error: publishError } = await db.from("courses").update({ status: "active" }).eq("id", created.id);
-        failure = publishError;
-      }
-      if (failure) {
-        const { error: cleanupError } = await db.from("courses").delete().eq("id", created.id);
-        if (cleanupError) console.error("Unable to remove a partially created course", cleanupError);
-      }
-    }
-    setBusy(false);
-    if (failure) {
-      toast.error("Could not create and publish the complete course.");
-    } else {
+    setBusy(true);
+    setCourseError("");
+    try {
+      const response = await fetch("/api/courses/publish", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...course, chapters }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.course_id) throw new Error(result?.error ?? "Course publication could not be confirmed. Check the course list before retrying.");
       toast.success("Course published.");
       setCourse({ subjectId: "", title: "", description: "" });
       setChapters([{ id: crypto.randomUUID(), title: "", lessons: [{ id: crypto.randomUUID(), title: "", content: "", video: "" }] }]);
       router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Course publication failed. Your draft is preserved.";
+      setCourseError(message);
+      toast.error(message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -254,7 +221,7 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
               <label className="block text-xs font-semibold">Classroom
                 <select className={`${input} mt-2`} required value={stream.classId} onChange={(event) => { setStream({ ...stream, classId: event.target.value }); setStudentIds([]); }}>
                   <option value="">Choose a classroom</option>
-                  {classes.map((item) => <option key={item.id} value={item.id}>{item.display_name} · {item.section}</option>)}
+                  {classes.map((item) => <option key={item.id} value={item.id}>{classLabel(item)}</option>)}
                 </select>
               </label>
               <label className="block text-xs font-semibold">Post type
@@ -335,6 +302,7 @@ export function FacultyLearningStudio({ classes, subjects, initialTab = "stream"
             </div>
             {courseMethod==="youtube"?<YoutubeImportWizard subjects={subjects}/>:(
           <form onSubmit={saveCourse} className="surface min-w-0 space-y-5 p-5 sm:p-6">
+            {courseError && <p role="alert" className="rounded-lg border border-amber-500 p-3 text-xs">{courseError}</p>}
             <div className="flex items-start gap-3 border-b border-[var(--line)] pb-4">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green-strong)]"><BookOpen size={18} /></span>
               <div>

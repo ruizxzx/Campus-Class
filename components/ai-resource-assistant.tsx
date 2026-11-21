@@ -1,4 +1,5 @@
 "use client";
+import {AIMarkdown} from "@/components/ai-markdown";
 
 import { useEffect, useState } from "react";
 import { ArrowUp, BrainCircuit, ChevronDown, ChevronUp, Sparkles, X } from "lucide-react";
@@ -95,7 +96,7 @@ export function AIResourceAssistant({
                   {messages.map((message, index) => (
                     <div key={`${message.role}-${index}`} className={`max-w-[88%] rounded-xl px-3 py-2.5 text-xs leading-5 ${message.role === "user" ? "ml-auto bg-[var(--green-soft)]" : "mr-auto bg-[var(--surface-2)]"}`}>
                       <div className="mb-1 text-[9px] font-bold uppercase tracking-[.1em] text-[var(--muted)]">{message.role === "user" ? "You" : "CampusClass AI"}</div>
-                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                      {message.role==="assistant"?<AIMarkdown value={message.content}/>:<p className="whitespace-pre-wrap break-words">{message.content}</p>}
                     </div>
                   ))}
                 </div> : <div className="rounded-xl bg-[var(--surface-2)] px-4 py-5 text-center"><Sparkles size={18} className="mx-auto text-[var(--green-strong)]"/><p className="mt-2 text-xs font-semibold">What would you like to understand?</p><p className="mt-1 text-[10px] leading-5 text-[var(--muted)]">Ask for a summary, explanation, key ideas or a study question.</p></div>}
@@ -123,7 +124,7 @@ export function AIResourceAssistant({
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className={`max-w-[88%] rounded-xl px-3 py-2.5 text-xs leading-5 ${message.role === "user" ? "ml-auto bg-[var(--green-soft)]" : "mr-auto bg-[var(--surface-2)]"}`}>
                   <div className="mb-1 text-[9px] font-bold uppercase tracking-[.1em] text-[var(--muted)]">{message.role === "user" ? "You" : "CampusClass AI"}</div>
-                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                  {message.role==="assistant"?<AIMarkdown value={message.content}/>:<p className="whitespace-pre-wrap break-words">{message.content}</p>}
                 </div>
               ))}
             </div> : null}

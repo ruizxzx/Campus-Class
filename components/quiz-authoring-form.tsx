@@ -179,8 +179,8 @@ export function QuizAuthoringForm({ classes }: { classes: ClassItem[] }) {
       }
     }
 
-    const openDate = opensAt ? new Date(opensAt) : null;
-    const closeDate = closesAt ? new Date(closesAt) : null;
+    const openDate = opensAt ? new Date(opensAt+"+05:30") : null;
+    const closeDate = closesAt ? new Date(closesAt+"+05:30") : null;
     if ((opensAt && Number.isNaN(openDate?.getTime())) || (closesAt && Number.isNaN(closeDate?.getTime()))
       || (openDate && closeDate && closeDate <= openDate)) {
       toast.error("Choose a valid assessment window.");
@@ -259,10 +259,10 @@ export function QuizAuthoringForm({ classes }: { classes: ClassItem[] }) {
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4">
         <div className="mb-3 text-xs font-semibold">Schedule and attempts</div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-[11px] font-medium text-[var(--muted)]">Opens at
+          <label className="block text-[11px] font-medium text-[var(--muted)]">Opens at (IST)
             <input className={`${input} mt-1.5 bg-[var(--surface)]`} type="datetime-local" value={opensAt} onChange={(event) => setOpensAt(event.target.value)} />
           </label>
-          <label className="block text-[11px] font-medium text-[var(--muted)]">Closes at
+          <label className="block text-[11px] font-medium text-[var(--muted)]">Closes at (IST)
             <input className={`${input} mt-1.5 bg-[var(--surface)]`} type="datetime-local" value={closesAt} onChange={(event) => setClosesAt(event.target.value)} />
           </label>
           <label className="block text-[11px] font-medium text-[var(--muted)]">Time limit · minutes

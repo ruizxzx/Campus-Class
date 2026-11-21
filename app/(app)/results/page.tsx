@@ -1,8 +1,7 @@
+import { istDate } from "@/lib/display";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader, EmptyState } from "@/components/ui";
-import { format } from "date-fns";
-
 type Evaluation = {
   marks: number;
   feedback: string | null;
@@ -64,7 +63,7 @@ export default async function ResultsPage() {
                   <span className="text-xs text-[var(--muted)]">/{assignment?.max_marks}</span>
                 </div>
                 <div className="text-[10px] text-[var(--muted)]">
-                  Released {format(new Date(evaluation.released_at), "dd MMM yyyy")}
+                  Released {istDate(evaluation.released_at,{"day":"2-digit","month":"short","year":"numeric"})}
                 </div>
               </div>
             </div>

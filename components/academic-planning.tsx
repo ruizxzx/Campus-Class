@@ -1,4 +1,5 @@
 "use client";
+import { classLabel } from "@/lib/display";
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -104,7 +105,7 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
   return <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
     {canManage ? <form onSubmit={upload} className="surface h-fit space-y-4 p-5">
       <div className="text-sm font-semibold">Upload class syllabus</div>
-      <label className="block text-xs font-semibold">Class<select className="input-base mt-2" required value={classId} onChange={(event) => setClassId(event.target.value)}><option value="">Choose a class</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.display_name || "Class"} · Section {item.section}</option>)}</select></label>
+      <label className="block text-xs font-semibold">Class<select className="input-base mt-2" required value={classId} onChange={(event) => setClassId(event.target.value)}><option value="">Choose a class</option>{classes.map((item) => <option key={item.id} value={item.id}>{classLabel(item)}</option>)}</select></label>
       <label className="block text-xs font-semibold">Syllabus title<input className="input-base mt-2" required minLength={2} maxLength={180} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Course syllabus"/></label>
       <label className="block text-xs font-semibold">Outline text<textarea className="input-base mt-2 min-h-28 resize-y" maxLength={50000} value={outline} onChange={(event) => setOutline(event.target.value)} placeholder="Paste a searchable outline for students and AI study help."/></label>
       <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[var(--line)] p-4 text-xs hover:border-[var(--green)]"><UploadCloud size={17} className="text-[var(--green)]"/><span className="min-w-0 break-all">{files.length?files.length+" PDFs selected":"Choose up to 10 PDFs · 20 MB each"}</span><input className="hidden" type="file" multiple disabled={saving||hasPending} accept="application/pdf,.pdf" onChange={(event) => setFiles(Array.from(event.target.files??[]))}/></label>
@@ -126,7 +127,7 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green)]"><Download size={15}/></div>
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold">{syllabus.title}</div>
-            <div className="mt-1 text-[10px] text-[var(--muted)]">{classroom?.display_name ?? "Class"} · Section {classroom?.section ?? "—"} · {Math.max(1, Math.round(syllabus.file_size / 1024))} KB</div>
+            <div className="mt-1 text-[10px] text-[var(--muted)]">{classLabel(classroom??{})} · {Math.max(1, Math.round(syllabus.file_size / 1024))} KB</div>
             {syllabus.outline_text ? <p className="mt-2 line-clamp-2 text-[10px] leading-5 text-[var(--muted)]">{syllabus.outline_text}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               {syllabus.outline_text&&<AISummarizeButton resourceType="syllabus" resourceId={syllabus.id}/>}
@@ -137,7 +138,7 @@ export function SyllabusManager({ classes, syllabi, canManage }: { classes: Clas
             const supabase = createClient();
             const { data, error } = await supabase.storage.from("class-syllabi").createSignedUrl(syllabus.storage_path, 300, { download: syllabus.file_name });
             if (error || !data?.signedUrl) toast.error("Could not open this syllabus.");
-            else window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+            else window.location.assign(data.signedUrl);
           }}><Download size={13}/>Open PDF</button>
           {canManage&&<button type="button" className="btn-secondary !px-3 !py-2 text-[10px]"
             disabled={indexingId!==null} onClick={()=>void indexPdf(syllabus.id)}>
@@ -222,7 +223,7 @@ export function ScheduleManager({ classes, entries, canManage }: { classes: Clas
   return <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
     {canManage ? <form onSubmit={add} className="surface h-fit space-y-4 p-5">
       <div className="flex items-center gap-2 text-sm font-semibold"><CalendarPlus size={16}/>Add class time</div>
-      <label className="block text-xs font-semibold">Class<select className="input-base mt-2" required value={form.classId} onChange={(event) => setForm({ ...form, classId: event.target.value })}><option value="">Choose a class</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.display_name || "Class"} · Section {item.section}</option>)}</select></label>
+      <label className="block text-xs font-semibold">Class<select className="input-base mt-2" required value={form.classId} onChange={(event) => setForm({ ...form, classId: event.target.value })}><option value="">Choose a class</option>{classes.map((item) => <option key={item.id} value={item.id}>{classLabel(item)}</option>)}</select></label>
       <label className="block text-xs font-semibold">Day<select className="input-base mt-2" value={form.weekday} onChange={(event) => setForm({ ...form, weekday: event.target.value })}>{weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block text-xs font-semibold">Starts<input className="input-base mt-2" type="time" required value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })}/></label>
@@ -242,7 +243,7 @@ export function ScheduleManager({ classes, entries, canManage }: { classes: Clas
         return <article key={entry.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--line)] p-4">
           <div className="w-20 text-xs font-semibold">{weekdays[entry.weekday]}</div>
           <div className="w-28 text-xs">{entry.start_time.slice(0, 5)}–{entry.end_time.slice(0, 5)}</div>
-          <div className="min-w-0 flex-[1_1_160px]"><div className="text-xs font-semibold">{classroom?.display_name ?? "Class"} · Section {classroom?.section ?? "—"}</div><div className="mt-1 text-[10px] text-[var(--muted)]">{entry.location || "Location not set"}{entry.notes ? ` · ${entry.notes}` : ""}</div></div>
+          <div className="min-w-0 flex-[1_1_160px]"><div className="text-xs font-semibold">{classLabel(classroom??{})}</div><div className="mt-1 text-[10px] text-[var(--muted)]">{entry.location || "Location not set"}{entry.notes ? ` · ${entry.notes}` : ""}</div></div>
           {canManage ? <button type="button" className="btn-secondary !px-3 !py-2 text-[10px]" onClick={() => void remove(entry.id)}><Trash2 size={13}/>Delete</button> : null}
         </article>;
       })}</div> : <p className="text-xs text-[var(--muted)]">No timetable entries yet.</p>}

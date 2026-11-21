@@ -29,7 +29,7 @@ export async function libraryClassAccess(actor:LibraryActor,classId:string,write
 export async function accessibleLibraryClasses(actor:LibraryActor){
  const db=createAdminClient();
  if(actor.profile.role==="admin"){
-   const {data,error}=await db.from("classes").select("id,display_name,section,subject_id,semester")
+   const {data,error}=await db.from("classes").select("id,display_name,section,subject_id,semester,subjects(name,code)")
      .eq("college_id",actor.profile.college_id).eq("is_active",true).order("display_name");
    if(error)throw new Error("Could not load college classes.");
    return data??[];
@@ -43,7 +43,7 @@ export async function accessibleLibraryClasses(actor:LibraryActor){
  const ids=[...new Set((relations??[]).map(x=>x.class_id))];
  if(!ids.length)return [];
  const {data,error}=await db.from("classes")
-   .select("id,display_name,section,subject_id,semester").eq("college_id",actor.profile.college_id)
+   .select("id,display_name,section,subject_id,semester,subjects(name,code)").eq("college_id",actor.profile.college_id)
    .eq("is_active",true).in("id",ids).order("display_name");
  if(error)throw new Error("Could not load accessible classrooms.");
  return data??[];

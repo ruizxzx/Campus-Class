@@ -1,6 +1,6 @@
+import { istDate } from "@/lib/display";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { format } from "date-fns";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/components/ui";
@@ -168,7 +168,7 @@ export default async function QuizDetailPage({ params }: { params: Promise<{ id:
                             <div>
                               <span className="text-xs font-semibold">Attempt {att.attempt_number}</span>
                               <div className="mt-1 text-[10px] text-[var(--muted)]">
-                                Submitted {att.submitted_at ? format(new Date(att.submitted_at), "dd MMM yyyy · h:mm a") : "In progress"}
+                                Submitted {att.submitted_at ? istDate(att.submitted_at,{"day":"2-digit","month":"short","year":"numeric","hour":"numeric","minute":"2-digit","hour12":true}) : "In progress"}
                               </div>
                             </div>
                             <div className="text-right">
@@ -258,7 +258,7 @@ export default async function QuizDetailPage({ params }: { params: Promise<{ id:
                           <div>
                             <div className="text-xs font-semibold">{student?.full_name ?? "Student"}</div>
                             <div className="mt-0.5 text-[10px] text-[var(--muted)]">
-                              Attempt {att.attempt_number} · {att.submitted_at ? format(new Date(att.submitted_at), "dd MMM, h:mm a") : "—"}
+                              Attempt {att.attempt_number} · {att.submitted_at ? istDate(att.submitted_at,{"day":"2-digit","month":"short","hour":"numeric","minute":"2-digit","hour12":true}) : "—"}
                             </div>
                           </div>
                           <div className="text-right text-xs font-semibold">
@@ -326,11 +326,11 @@ export default async function QuizDetailPage({ params }: { params: Promise<{ id:
             <div className="mt-4 border-t border-[var(--line)] pt-4 text-xs space-y-2">
               <div>
                 <span className="text-[10px] text-[var(--muted)]">Opens at:</span>
-                <div className="font-medium">{quiz.opens_at ? format(new Date(quiz.opens_at), "dd MMM yyyy · h:mm a") : "Immediately"}</div>
+                <div className="font-medium">{quiz.opens_at ? istDate(quiz.opens_at,{"day":"2-digit","month":"short","year":"numeric","hour":"numeric","minute":"2-digit","hour12":true}) : "Immediately"}</div>
               </div>
               <div>
                 <span className="text-[10px] text-[var(--muted)]">Closes at:</span>
-                <div className="font-medium">{quiz.closes_at ? format(new Date(quiz.closes_at), "dd MMM yyyy · h:mm a") : "No deadline"}</div>
+                <div className="font-medium">{quiz.closes_at ? istDate(quiz.closes_at,{"day":"2-digit","month":"short","year":"numeric","hour":"numeric","minute":"2-digit","hour12":true}) : "No deadline"}</div>
               </div>
             </div>
           </div>

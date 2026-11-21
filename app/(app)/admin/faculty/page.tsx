@@ -1,3 +1,4 @@
+import {MemberRoleEditor} from "@/components/member-role-editor";
 import { requireRole } from "@/lib/auth";
 import { PageHeader } from "@/components/ui";
 import { InviteManager } from "@/components/admin-managers";
@@ -7,5 +8,6 @@ export default async function FacultyPage() {
   return <>
     <PageHeader title="Faculty" description="Create faculty accounts with a temporary password, manage access and reset passwords without email delivery."/>
     <InviteManager profile={profile} role="faculty"/>
+      <MemberRoleEditor collegeId={profile.college_id} role="faculty"/>
   </>;
 }

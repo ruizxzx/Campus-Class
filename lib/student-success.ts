@@ -66,9 +66,9 @@ export function summarizeStudent(
     reasons.push("Average released quiz score below "+rules.quiz_min_percent+"%");
   }
   const evidenceCount = Number(input.attendanceSessions >= rules.min_attendance_sessions) + Number(input.assignedWork >= rules.min_assigned_work) + Number(quizzes.length >= rules.min_released_quizzes);
-  const level = evidenceCount === 0 ? "insufficient_data"
-    : reasons.length >= 2 ? "needs_support"
+  const level = reasons.length >= 2 ? "needs_support"
     : reasons.length === 1 ? "watch"
+    : evidenceCount < 3 ? "insufficient_data"
     : "on_track";
   return { attendancePercent, submissionPercent, quizPercent, level, reasons, evidenceCount };
 }

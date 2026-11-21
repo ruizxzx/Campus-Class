@@ -1,4 +1,5 @@
 "use client";
+import { istDate } from "@/lib/display";
 import { useEffect, useMemo, useState } from "react";
 import { orderQuestions } from "@/lib/quiz-order";
 import { useRouter } from "next/navigation";
@@ -33,6 +34,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
   const [submitting, setSubmitting] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState("");
+  const [retry, setRetry] = useState(0);
   const [expiry, setExpiry] = useState<string | null>(null);
   const [timed, setTimed] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -43,10 +45,12 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
     if (!isOpen || attemptsRemaining <= 0 || !questions.length) return;
     let cancelled = false;
     setSessionReady(false);
+    setSessionError("");
     async function start() {
       try {
         const response = await fetch("/api/quizzes/session", {
           method: "POST",
+          signal: AbortSignal.timeout(15000),
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "start", quiz_id: quizId }),
         });
@@ -64,7 +68,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
     }
     void start();
     return () => { cancelled = true; };
-  }, [quizId, isOpen, attemptsRemaining, questions.length]);
+  }, [quizId, isOpen, attemptsRemaining, questions.length, retry]);
 
   useEffect(() => {
     if (!expiry) return;
@@ -85,7 +89,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
         });
         const result = await response.json().catch(() => null);
         if (!response.ok) throw new Error(result?.error ?? "Autosave failed.");
-        setSavedAt(new Date().toLocaleTimeString());
+        setSavedAt(istDate(new Date(),{hour:"numeric",minute:"2-digit"}));
         setSaveError("");
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : "Autosave failed. Check connection.");
@@ -143,7 +147,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
     const hasAnswers = Object.values(answers).some((answer) =>
       Array.isArray(answer) ? answer.length > 0 : answer.trim().length > 0,
     );
-    if (!sessionReady || (timed && secondsLeft === 0)) {
+    if (!sessionReady || (secondsLeft === 0)) {
       toast.error("The quiz attempt is not active. Check the timer or try refreshing.");
       return;
     }
@@ -175,7 +179,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" aria-label="Assessment questions">
-      {sessionError && <div role="alert" className="surface border-amber-500 p-4 text-xs">{sessionError}</div>}
+      {sessionError && <div role="alert" className="surface border-amber-500 p-4 text-xs">{sessionError} <button type="button" className="btn-secondary" onClick={()=>setRetry(n=>n+1)}>Retry secure attempt</button></div>}
       {saveError && <div role="alert" className="surface border-amber-500 p-4 text-xs">{saveError}</div>}
       {timed && secondsLeft !== null && <div className={"surface-flat flex items-center gap-3 p-4 text-xs " + (secondsLeft <= 60 ? "text-red-600" : "")}>
         <Clock3 size={18}/>Time remaining <strong className="ml-auto tabular-nums">{Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}</strong>
@@ -194,7 +198,7 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
           <div className="h-full rounded-full bg-[var(--green-strong)] transition-[width] duration-150" style={{ width: `${progress}%` }} />
         </div>
       </section>
-      {orderedQuestions.map((q, idx) => {
+      <fieldset disabled={!sessionReady||submitting||secondsLeft===0} className="space-y-4">{orderedQuestions.map((q, idx) => {
         const rawOptions = Array.isArray(q.options) ? q.options : [];
         const currentAnswer = answers[q.id];
         const selectedValues = Array.isArray(currentAnswer) ? currentAnswer : [];
@@ -290,13 +294,13 @@ export function QuizRunner({ quizId, questions, attemptsRemaining, isOpen, stude
             )}
           </article>
         );
-      })}
+      })}</fieldset>
 
       <div className="surface-flat flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <span className="text-[11px] text-[var(--muted)]">Review your answers before submitting.</span>
         <button
           type="submit"
-          disabled={submitting || !sessionReady || (timed && secondsLeft === 0)}
+          disabled={submitting || !sessionReady || secondsLeft === 0 || answeredCount===0}
           className="btn-primary !px-6 !py-3 font-semibold"
         >
           <Send size={15} />

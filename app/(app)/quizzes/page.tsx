@@ -1,10 +1,11 @@
+import { scopedClasses } from "@/lib/class-scope";
+import { classLabel, istDate } from "@/lib/display";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/components/ui";
 import { LearningHubHeader } from "@/components/learning-hub-header";
 import Link from "next/link";
 import { ArrowRight, CalendarClock, ClipboardCheck, Clock3, ListChecks } from "lucide-react";
-import { format } from "date-fns";
 
 type QuizListClass = {
   display_name: string | null;
@@ -30,20 +31,14 @@ export default async function QuizzesPage({ searchParams }: { searchParams: Prom
   const db = await createClient();
   const { class: classId } = await searchParams;
   const validClassId = classId && /^[0-9a-f-]{36}$/i.test(classId) ? classId : null;
-  const { data: classes, error: classError } = await db.from("classes")
-    .select("id,display_name,section")
-    .eq("college_id", profile.college_id)
-    .order("display_name");
-  if (classError) {
-    console.error("Unable to load assessment classrooms", classError);
-    throw new Error("Unable to load assessment filters.");
-  }
+  const classes=await scopedClasses(profile);
+  const ids=classes.map(c=>c.id).filter(id=>!validClassId||id===validClassId);
   let query = db.from("quizzes")
     .select("id,title,description,opens_at,closes_at,duration_minutes,max_marks,attempts_allowed,status,classes(display_name,section,subjects(name))")
     .eq("college_id", profile.college_id)
     .order("created_at", { ascending: false });
-  if (validClassId) query = query.eq("class_id", validClassId);
-  const { data: quizzes, error } = await query;
+  if(profile.role==="student")query=query.eq("status","published");
+  const { data: quizzes, error } = ids.length?await query.in("class_id",ids):{data:[],error:null};
   if (error) {
     console.error("Unable to load assessments", error);
     throw new Error("Unable to load assessments.");
@@ -67,7 +62,7 @@ export default async function QuizzesPage({ searchParams }: { searchParams: Prom
           <label className="sr-only" htmlFor="assessment-class-filter">Filter by class</label>
           <select id="assessment-class-filter" name="class" defaultValue={validClassId ?? ""} className="input-base min-w-0 flex-1 sm:w-64">
             <option value="">All accessible classes</option>
-            {(classes ?? []).map((classroom) => <option key={classroom.id} value={classroom.id}>{classroom.display_name} · {classroom.section}</option>)}
+            {(classes ?? []).map((classroom) => <option key={classroom.id} value={classroom.id}>{classLabel(classroom)}</option>)}
           </select>
           <button type="submit" className="btn-secondary shrink-0">Filter</button>
         </form>
@@ -93,7 +88,7 @@ export default async function QuizzesPage({ searchParams }: { searchParams: Prom
                 <span className="inline-flex items-center gap-1.5"><ListChecks size={13} />{quiz.max_marks} marks</span>
                 {quiz.duration_minutes ? <span className="inline-flex items-center gap-1.5"><Clock3 size={13} />{quiz.duration_minutes} min</span> : null}
                 <span>{quiz.attempts_allowed} {quiz.attempts_allowed === 1 ? "attempt" : "attempts"}</span>
-                {quiz.closes_at ? <span className="inline-flex items-center gap-1.5"><CalendarClock size={13} />Due {format(new Date(quiz.closes_at), "dd MMM, h:mm a")}</span> : null}
+                {quiz.closes_at ? <span className="inline-flex items-center gap-1.5"><CalendarClock size={13} />Due {istDate(quiz.closes_at)}</span> : null}
                 <span className="ml-auto inline-flex items-center gap-1 font-semibold text-[var(--green-strong)]">Details <ArrowRight size={13} className="transition-transform duration-150 group-hover:translate-x-0.5" /></span>
               </div>
             </Link>

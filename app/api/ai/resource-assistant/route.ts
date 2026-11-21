@@ -1,3 +1,4 @@
+import {trackAIRequest} from "@/lib/ai-usage";
 import { NextResponse } from "next/server";
 import { requestProfile, isResponse } from "@/lib/http";
 import { createClient } from "@/lib/supabase/server";
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await trackAIRequest(context.profile.college_id,"resource");
     const answer = await completeWithOpenRouter(context.profile, [
       {
         role: "system",

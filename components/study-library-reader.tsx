@@ -1,4 +1,5 @@
 "use client";
+import { istDate } from "@/lib/display";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -98,7 +99,7 @@ export function StudyLibraryReader({materialId,version,isStaff,versions,initialP
      <LibraryUploadForm classes={[]} replaceMaterialId={materialId}/>
      <div className="surface p-5"><h2 className="font-semibold mb-3">File version history</h2>
        <div className="space-y-2">{versions.map(v=><div key={v.id} className="flex flex-wrap gap-3 items-center justify-between border-b border-[var(--line)] py-3 text-xs">
-         <span>Version {v.version} · {v.file_name} · {new Date(v.created_at).toLocaleDateString("en-IN")}</span>
+         <span>Version {v.version} · {v.file_name} · {istDate(v.created_at,{day:"2-digit",month:"short",year:"numeric"})}</span>
          <div className="flex gap-2">
            <a className="btn-secondary" href={url+"&mode=download&version_id="+encodeURIComponent(v.id)}>Download</a>
            {v.id!==version.id?<button className="btn-secondary" type="button" disabled={busy} onClick={()=>void restore(v.id)}>Restore</button>:<span className="status-pill green">Current</span>}

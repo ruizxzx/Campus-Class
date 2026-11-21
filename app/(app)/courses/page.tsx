@@ -1,3 +1,4 @@
+import { scopedClasses } from "@/lib/class-scope";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/components/ui";
@@ -11,7 +12,7 @@ type CourseListRow = {
   description: string | null;
   status: string;
   subjects: { id: string; name: string; code: string } | { id: string; name: string; code: string }[] | null;
-  course_modules: { id: string; course_lessons: { id: string }[] | null }[] | null;
+  course_modules: { id: string; course_lessons: { id: string; is_published: boolean }[] | null }[] | null;
 };
 
 export default async function CoursesPage({ searchParams }: { searchParams: Promise<{ subject?: string }> }) {
@@ -19,12 +20,14 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const db = await createClient();
   const { subject: subjectId } = await searchParams;
   const validSubjectId = subjectId && /^[0-9a-f-]{36}$/i.test(subjectId) ? subjectId : null;
+  const classRows=await scopedClasses(profile);
+  const subjectIds=[...new Set(classRows.map(c=>c.subject_id))];
   const query = db.from("courses")
-    .select("id,title,description,status,subjects(id,name,code),course_modules(id,course_lessons(id))")
+    .select("id,title,description,status,subjects(id,name,code),course_modules(id,course_lessons(id,is_published))")
     .eq("status", "active")
     .eq("college_id", profile.college_id)
     .order("created_at", { ascending: false });
-  const { data: courses, error } = await query;
+  const { data: courses, error } = profile.role==="admin"?await query:subjectIds.length?await query.in("subject_id",subjectIds):{data:[],error:null};
   if (error) {
     console.error("Unable to load course materials", error);
     throw new Error("Unable to load courses.");
@@ -33,6 +36,9 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const courseRows = validSubjectId
     ? allCourseRows.filter((course) => course.subjects && (Array.isArray(course.subjects) ? course.subjects[0]?.id : course.subjects.id) === validSubjectId)
     : allCourseRows;
+  const ids=courseRows.flatMap(c=>(c.course_modules??[]).flatMap(m=>(m.course_lessons??[]).filter(l=>l.is_published).map(l=>l.id)));
+  const completed=new Set<string>();
+  if(profile.role==="student")for(let i=0;i<ids.length;i+=100){const {data,error}=await db.from("lesson_progress").select("lesson_id").eq("college_id",profile.college_id).eq("student_id",profile.id).in("lesson_id",ids.slice(i,i+100));if(error)throw new Error("Unable to load course progress.");for(const item of data??[])completed.add(item.lesson_id);}
   const subjects = [...new Map(allCourseRows.flatMap((course) => {
     const subject = Array.isArray(course.subjects) ? course.subjects[0] : course.subjects;
     return subject ? [[subject.id, subject] as const] : [];
@@ -62,7 +68,9 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {courseRows.length ? courseRows.map((course) => {
           const subject = Array.isArray(course.subjects) ? course.subjects[0] : course.subjects;
-          const lessonCount = (course.course_modules ?? []).reduce((total, module) => total + (module.course_lessons?.length ?? 0), 0);
+          const published=(course.course_modules??[]).flatMap(m=>(m.course_lessons??[]).filter(l=>l.is_published));
+          const lessonCount=published.length;
+          const done=published.filter(l=>completed.has(l.id)).length;
           return (
             <Link
               href={`/courses/${course.id}`}
@@ -76,6 +84,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <div className="mt-4 text-[10px] font-semibold uppercase tracking-[.12em] text-[var(--muted)]">{subject?.name ?? "Subject course"}</div>
               <h2 className="mt-1 text-base font-semibold leading-6 tracking-[-.025em]">{course.title}</h2>
               {course.description ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{course.description}</p> : null}
+              {profile.role==="student"&&<div className="mt-3 text-xs font-medium">Enrolled · {lessonCount?Math.round(done/lessonCount*100):0}% complete ({done}/{lessonCount})</div>}
               <div className="mt-auto flex items-center justify-between gap-3 border-t border-[var(--line)] pt-4 text-[11px] text-[var(--muted)]">
                 <span className="inline-flex items-center gap-1.5"><Layers size={13} />{course.course_modules?.length ?? 0} chapters · {lessonCount} lectures</span>
                 <span className="inline-flex items-center gap-1 font-semibold text-[var(--green-strong)]">Open course <ArrowRight size={13} className="transition-transform duration-150 group-hover:translate-x-0.5" /></span>
