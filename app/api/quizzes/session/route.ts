@@ -10,11 +10,13 @@ const schema = z.discriminatedUnion("action", [
     answers: z.record(z.string().uuid(), z.union([z.string().max(5000), z.array(z.string().max(500)).max(50)])) }),
 ]);
 
-// Report only the failing operation and sanitized SQLSTATE/PostgREST code.
-function databaseFailure(operation: string, error: { code?: string }, hint?: string) {
+// Raw Postgres diagnostics stay in server logs; only operation/code reach clients.
+function databaseFailure(operation: string, error: { code?: string; message?: string; details?: string | null; hint?: string | null }, hint?: string) {
   const raw = error.code ?? "";
   const code = /^(?:[0-9A-Z]{5}|PGRST[0-9]{3})$/.test(raw) ? raw : "unknown";
-  console.error("Quiz session database operation failed", { operation, code });
+  console.error("Quiz session database operation failed", {
+    operation, code, message: error.message, detail: error.details, hint: error.hint,
+  });
   return NextResponse.json({
     error: "Could not " + operation + ". Reference: " + code + (hint ? ". " + hint : ""),
     operation, code,
