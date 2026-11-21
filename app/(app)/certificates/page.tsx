@@ -1,3 +1,4 @@
+import { istDate } from "@/lib/display";
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -20,7 +21,7 @@ export default async function CertificatesPage(){
         <h2 className="mt-3 font-semibold">{String(meta.course_title??course?.title??"Course completion")}</h2>
         <p className="mt-2 text-xs text-[var(--muted)]">{String(meta.college_name??"College-issued certificate")}</p>
         <p className="mt-2 text-xs">Certificate {cert.certificate_number}</p>
-        <p className="mt-1 text-xs text-[var(--muted)]">Issued {new Date(cert.issued_at).toLocaleDateString("en-IN")}</p>
+        <p className="mt-1 text-xs text-[var(--muted)]">Issued {istDate(cert.issued_at,{day:"2-digit",month:"short",year:"numeric"})}</p>
         <Link href={"/certificates/"+cert.id} className="btn-secondary mt-4"><ExternalLink size={14}/>View / print certificate</Link>
       </article>;
     }):<EmptyState title="No certificates yet" description="Complete all lectures in your enrolled course to earn a college certificate."/>}</div>

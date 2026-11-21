@@ -9,3 +9,6 @@ export function istDate(value:string|Date, options:Intl.DateTimeFormatOptions={d
  const date=new Date(value);
  return Number.isFinite(date.getTime())?new Intl.DateTimeFormat("en-IN",{...options,timeZone:"Asia/Kolkata"}).format(date):"—";
 }
+
+export function istInputToISOString(value:string){return new Date(value+"+05:30").toISOString();}
+export function istDateInput(value:string){const date=new Date(value);if(!Number.isFinite(date.getTime()))return "";return new Date(date.getTime()+330*60000).toISOString().slice(0,16);}

@@ -1,3 +1,4 @@
+import { istDate } from "@/lib/display";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
@@ -77,7 +78,7 @@ export default async function StudentClassDetailPage({ params }: { params: Promi
             <Link key={assignment.id} href={`/assignments/${assignment.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] p-3">
               <div>
                 <div className="text-xs font-semibold">{assignment.title}</div>
-                <div className="mt-1 text-[10px] text-[var(--muted)]">{assignment.due_at ? new Date(assignment.due_at).toLocaleString() : "No deadline"} · {assignment.max_marks} marks</div>
+                <div className="mt-1 text-[10px] text-[var(--muted)]">{assignment.due_at ? istDate(assignment.due_at) : "No deadline"} · {assignment.max_marks} marks</div>
               </div>
               <span className="status-pill green">Open</span>
             </Link>
@@ -90,7 +91,7 @@ export default async function StudentClassDetailPage({ params }: { params: Promi
           {announcements.data?.length ? announcements.data.map((announcement) => (
             <article key={announcement.id} className="border-t border-[var(--line)] pt-3 first:border-0">
               <div className="text-xs font-semibold">{announcement.title}</div>
-              <div className="mt-1 text-[10px] text-[var(--muted)]">{new Date(announcement.published_at).toLocaleDateString()}</div>
+              <div className="mt-1 text-[10px] text-[var(--muted)]">{istDate(announcement.published_at,{day:"2-digit",month:"short",year:"numeric"})}</div>
               <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-[var(--muted)]">{announcement.body}</p>
             </article>
           )) : <EmptyState title="No announcements" description="Your faculty has not posted an update yet." />}

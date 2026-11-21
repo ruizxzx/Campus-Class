@@ -1,3 +1,4 @@
+import { istDate } from "@/lib/display";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
@@ -53,7 +54,7 @@ export default async function StudentAssignmentDetailPage({ params }: { params: 
         </div>
         {assignment.description && <p className="mt-4 text-sm leading-7 text-[var(--muted)]">{assignment.description}</p>}
         <div className="mt-5 border-t border-[var(--line)] pt-5">
-          <div className="text-[10px] text-[var(--muted)]">Published {new Date(assignment.issue_at).toLocaleString()}</div>
+          <div className="text-[10px] text-[var(--muted)]">Published {istDate(assignment.issue_at)}</div>
           <div className="mt-4 text-xs font-semibold">Instructions</div>
           <p className="mt-2 whitespace-pre-wrap text-xs leading-7 text-[var(--muted)]">{assignment.instructions || "No additional instructions were provided."}</p>
         </div>
@@ -69,7 +70,7 @@ export default async function StudentAssignmentDetailPage({ params }: { params: 
       <aside className="space-y-4">
         <div className="surface p-5">
           <div className="text-xs font-semibold">Deadline and status</div>
-          <div className="mt-3 text-lg font-semibold tracking-tight">{assignment.due_at ? new Date(assignment.due_at).toLocaleString() : "No deadline"}</div>
+          <div className="mt-3 text-lg font-semibold tracking-tight">{assignment.due_at ? istDate(assignment.due_at) : "No deadline"}</div>
           <div className="mt-1 text-[10px] text-[var(--muted)]">{isLate ? (assignment.allow_late ? "Late submissions accepted" : "Late submissions disabled") : "Submit before the deadline"}</div>
           <div className="mt-4 border-t border-[var(--line)] pt-4 text-xs text-[var(--muted)]">Resubmission: <span className="font-semibold text-[var(--text)]">{assignment.allow_resubmission ? "Allowed" : "Not allowed"}</span></div>
         </div>
@@ -80,7 +81,7 @@ export default async function StudentAssignmentDetailPage({ params }: { params: 
               <span className="text-xs font-semibold">Version {submission.version}</span>
               <span className={`status-pill ${submission.status === "late" ? "orange" : "green"}`}>{submission.status}</span>
             </div>
-            <div className="mt-1 text-[10px] text-[var(--muted)]">{new Date(submission.submitted_at).toLocaleString()}</div>
+            <div className="mt-1 text-[10px] text-[var(--muted)]">{istDate(submission.submitted_at)}</div>
           </div>)}
         </div>}
       </aside>

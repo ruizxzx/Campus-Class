@@ -1,3 +1,4 @@
+import { istDate } from "@/lib/display";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -53,7 +54,7 @@ export default async function StudentAssignmentsPage({
             </div>
             <div className="text-right">
               <div className="flex items-center justify-end gap-1 text-xs font-semibold">
-                <Clock3 size={13} />{assignment.due_at ? new Date(assignment.due_at).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"}) : "No deadline"}
+                <Clock3 size={13} />{assignment.due_at ? istDate(assignment.due_at) : "No deadline"}
               </div>
               <div className="mt-1 text-[10px] text-[var(--muted)]">{assignment.max_marks} marks</div>
             </div>

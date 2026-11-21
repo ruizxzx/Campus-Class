@@ -1,3 +1,4 @@
+import { istDate } from "@/lib/display";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -147,7 +148,7 @@ export default async function FacultyProgress({searchParams}:{
             <div className="h-full bg-[var(--green-strong)]" style={{width:(total?Math.round(p.done/total*100):0)+"%"}}/></div></td>
           <td>{total&&p.done===total?"Completed":p.started?"In progress":"Not started"}</td>
           <td>{p.watchedPercent}% average</td>
-          <td>{p.lastActivity?new Date(p.lastActivity).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"}):"—"}</td>
+          <td>{p.lastActivity?istDate(p.lastActivity):"—"}</td>
           <td>{p.hasCertificate?"Issued":"Pending"}</td>
           {approvalRequired?<td>{p.approved?"Approved":p.done===total&&total>0?
             <CourseApprovalButton courseId={selected.id} studentId={p.id}/>:"Waiting for lessons"}</td>:null}
