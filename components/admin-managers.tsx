@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {useRouter} from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types/database";
 import { toast } from "sonner";
@@ -15,6 +16,10 @@ function generateTemporaryPassword() {
 }
 
 export function InviteManager({ profile, role }: { profile: Profile; role: "faculty" | "student" }) {
+  const router=useRouter();
+  const [createRole,setCreateRole]=useState(role);
+  const [department,setDepartment]=useState("");
+  const [departments,setDepartments]=useState<{id:string;name:string}[]>([]);
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -28,6 +33,7 @@ export function InviteManager({ profile, role }: { profile: Profile; role: "facu
     const supabase = createClient();
     const { data, error } = await supabase.from("profiles").select("id,full_name,email,status,created_at").eq("college_id", profile.college_id).eq("role", role).order("created_at", { ascending: false });
     if (error) toast.error("Could not load college members."); else setRows(data ?? []);
+    const dept=await supabase.from("departments").select("id,name").eq("college_id",profile.college_id).order("name");if(!dept.error)setDepartments(dept.data??[]);
     setLoading(false);
   }, [profile.college_id, role]);
   useEffect(() => { void load(); }, [load]);
@@ -35,12 +41,12 @@ export function InviteManager({ profile, role }: { profile: Profile; role: "facu
   async function invite(event: React.FormEvent) {
     event.preventDefault(); setSaving(true); setCredentials(null);
     try {
-      const response = await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, role, send_setup_email: sendSetupEmail }) });
+      const response = await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, role:createRole, department_id:department||null, send_setup_email: sendSetupEmail }) });
       const result = await response.json(); if (!response.ok) throw new Error(result.error || "Account creation failed.");
       setCredentials({ email: form.email.trim().toLowerCase(), password: form.password, message: result.message });
       setForm({ full_name: "", email: "", password: "" }); setShowPassword(false); toast.success("Member account created.");
       if (result.warning) toast.warning(result.warning);
-      await load();
+      await load();router.refresh();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not create account."); }
     finally { setSaving(false); }
   }
@@ -49,8 +55,10 @@ export function InviteManager({ profile, role }: { profile: Profile; role: "facu
   return <div className="grid gap-5 xl:grid-cols-[.9fr_1.1fr]">
     <div className="surface flex flex-wrap items-center justify-between gap-3 p-4 xl:col-span-2"><div><strong className="text-sm">Need to create many accounts?</strong><p className="mt-1 text-xs text-[var(--muted)]">Generate, import CSV / Excel, or paste faculty and student accounts in one batch.</p></div><Link className="btn-primary" href="/admin/bulk-accounts"><Users size={15}/> Bulk Import / Create Accounts</Link></div>
     <Panel>
-      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green)]"><UserPlus size={18}/></div><div><div className="text-sm font-semibold">Create {role} account</div><div className="mt-1 text-[11px] text-[var(--muted)]">Creates an active account immediately. Optionally send a password setup email via college SMTP.</div></div></div>
+      <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--green-soft)] text-[var(--green)]"><UserPlus size={18}/></div><div><div className="text-sm font-semibold">Create {createRole} account</div><div className="mt-1 text-[11px] text-[var(--muted)]">Creates an active account immediately. Optionally send a password setup email via college SMTP.</div></div></div>
       <form onSubmit={invite} className="mt-5 space-y-4">
+        <Field label="Role"><select className="input-base" value={createRole} onChange={e=>setCreateRole(e.target.value as "faculty"|"student")}><option value="faculty">Faculty</option><option value="student">Student</option></select></Field>
+        <Field label="Department"><select className="input-base" value={department} onChange={e=>setDepartment(e.target.value)}><option value="">Not assigned</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></Field>
         <Field label="Full name"><input className="input-base" required minLength={2} maxLength={120} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Enter full name"/></Field>
         <Field label="Email address"><input className="input-base" required type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@college.edu"/></Field>
         <Field label="Temporary password"><div className="relative"><input className="input-base pr-11" required type={showPassword ? "text" : "password"} minLength={8} maxLength={128} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 8 characters"/><button type="button" aria-label="Toggle password visibility" onClick={() => setShowPassword((visible) => !visible)} className="absolute top-1/2 right-3 -translate-y-1/2 text-[var(--muted)]">{showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}</button></div><button type="button" onClick={() => { try { setForm((current) => ({ ...current, password: generateTemporaryPassword() })); setShowPassword(true); } catch (error) { toast.error(error instanceof Error ? error.message : "Could not generate a secure password."); } }} className="mt-2 text-[10px] font-semibold text-[var(--green)]">Generate temporary password</button></Field>

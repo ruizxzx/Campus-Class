@@ -26,7 +26,7 @@ export default async function CertificateDetail({params}:{params:Promise<{certif
   const collegeName=String(meta.college_name??college?.name??"College");
   const courseTitle=String(meta.course_title??course?.title??"Course");
   return <main className="mx-auto max-w-4xl p-4 sm:p-8">
-    <nav className="mb-5 print:hidden"><Link href={profile.role==="admin"?"/admin/certificates":"/certificates"} className="btn-secondary">Back to certificates</Link> <PrintCertificate/></nav>
+    <nav className="mb-5 print:hidden"><Link href={profile.role==="admin"?"/admin/certificates":"/certificates"} className="btn-secondary">Back to certificates</Link> <PrintCertificate student={displayName(studentName)} college={collegeName} course={courseTitle} issued={istDate(cert.issued_at,{day:"numeric",month:"long",year:"numeric"})} number={cert.certificate_number} verify={(process.env.NEXT_PUBLIC_APP_URL??"https://campus-class.vercel.app").replace(/[/]$/,"")+"/verify/"+cert.certificate_number} logo={branding?.logo_data} template={branding?.template} lessons={typeof meta.lesson_count==="number"?meta.lesson_count:undefined}/></nav>
     <article aria-label="College course completion certificate" className={"rounded-xl border-[10px] bg-white text-[#1a2823] px-8 py-12 sm:px-14 sm:py-20 text-center shadow-xl print:shadow-none "+(branding?.template==="modern"?"border-solid border-blue-700":"border-double border-emerald-700")}>
       {branding?.logo_data?<img src={branding.logo_data} alt="College logo" className="mx-auto h-20 w-auto object-contain"/>:<Award className="text-emerald-700 mx-auto" size={52}/>}
       <div className="mt-6 text-lg font-semibold uppercase tracking-widest">{collegeName}</div>
@@ -43,6 +43,6 @@ export default async function CertificateDetail({params}:{params:Promise<{certif
         Verify: {(process.env.NEXT_PUBLIC_APP_URL??"https://campus-class.vercel.app").replace(/[/]$/,"")}/verify/{cert.certificate_number}
       </div>
     </article>
-    <p className="mt-5 text-center text-sm text-[var(--muted)] print:hidden">Use your browser Print command to save this certificate as PDF.</p>
+    <p className="mt-5 text-center text-sm text-[var(--muted)] print:hidden">Download the certificate as a PDF or use your browser Print command.</p>
   </main>;
 }
