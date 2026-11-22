@@ -1,5 +1,6 @@
 "use client";
 import {AIMarkdown} from "@/components/ai-markdown";
+import type { CopilotPracticeQuestion } from "@/lib/copilot-practice";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -9,7 +10,7 @@ import { translateUi } from "@/lib/ui-language";
 import { ArrowUp, BrainCircuit, Sparkles } from "lucide-react";
 
 type Reference = { id: string; type: string; title: string; href: string };
-type Message = { role: "user" | "assistant"; content: string; sources?: Reference[] };
+type Message = { role: "user" | "assistant"; content: string; sources?: Reference[]; practiceQuestions?: CopilotPracticeQuestion[] };
 
 const suggestedQuestions = [
   "What should I work on next?",
@@ -22,6 +23,8 @@ export function AIStudyAssistant({ syllabi, notes }: {
   notes: { id:string; title:string }[];
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [quizAnswers, setQuizAnswers] = useState<Record<number,Record<number,number>>>({});
+  const [submittedQuiz, setSubmittedQuiz] = useState<Record<number,boolean>>({});
   const language=useUiLanguage();
   const t=(label:string)=>translateUi(label,language);
   const [question, setQuestion] = useState("");
@@ -50,7 +53,7 @@ export function AIStudyAssistant({ syllabi, notes }: {
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(result?.error ?? `The study assistant could not answer (HTTP ${response.status}).`);
       if (typeof result?.answer !== "string" || !result.answer.trim()) throw new Error("The AI returned no answer. Please retry.");
-      setMessages((current) => [...current, { role: "assistant", content: result.answer, sources: result.sources ?? [] }]);
+      setMessages((current) => [...current, { role: "assistant", content: result.answer, sources: result.sources ?? [], practiceQuestions: Array.isArray(result.practiceQuestions) ? result.practiceQuestions : undefined }]);
     } catch (error) {
       setMessages((current) => current.filter((message, index) => !(index === current.length - 1 && message.role === "user" && message.content === text)));
       setQuestion(text);
@@ -79,7 +82,30 @@ export function AIStudyAssistant({ syllabi, notes }: {
         <div className="mt-5 flex flex-wrap justify-center gap-2">{suggestedQuestions.map((item) => <button key={item} type="button" onClick={() => setQuestion(t(item))} className="btn-secondary !rounded-full !px-3 !py-2 text-[10px]">{t(item)}</button>)}</div>
       </div> : messages.map((message, index) => <div key={`${index}-${message.role}`} className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "ml-auto bg-[var(--green-soft)]" : "bg-[var(--surface-2)]"}`}>
         <div className="mb-1 text-[9px] font-bold uppercase tracking-[.12em] text-[var(--muted)]">{message.role === "user" ? t("You") : "CampusClass AI"}</div>
-        {message.role==="assistant"?<AIMarkdown value={message.content}/>:<p className="whitespace-pre-wrap break-words">{message.content}</p>}
+        {message.role==="assistant"&&message.practiceQuestions?.length ? <section className="space-y-4" aria-label="Interactive practice quiz">
+          <p className="text-xs text-[var(--muted)]">Practice only — this score will not appear in your gradebook. Correct answers stay hidden until you submit.</p>
+          {message.practiceQuestions.map((item,i)=><fieldset key={i} className="rounded-xl border border-[var(--line)] p-3">
+            <legend className="px-1 text-xs font-semibold">Question {i+1} of {message.practiceQuestions?.length}</legend>
+            <p className="mb-3 text-sm">{item.question}</p>
+            <div className="space-y-2">{item.choices.map((choice,j)=><label key={j}
+              className={"flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-xs "+
+                (submittedQuiz[index]&&j===item.answer?"border-green-600 bg-[var(--green-soft)]":
+                  submittedQuiz[index]&&quizAnswers[index]?.[i]===j&&j!==item.answer?"border-red-500":"border-[var(--line)]")}>
+              <input type="radio" className="mt-0.5" name={"practice-"+index+"-"+i}
+                checked={quizAnswers[index]?.[i]===j} disabled={Boolean(submittedQuiz[index])}
+                onChange={()=>setQuizAnswers(current=>({...current,[index]:{...current[index],[i]:j}}))}/>
+              <span>{String.fromCharCode(65+j)}. {choice}</span>
+            </label>)}</div>
+            {submittedQuiz[index]?<p className="mt-2 text-xs">
+              {quizAnswers[index]?.[i]===item.answer?"Correct.":"Incorrect. Correct answer: "+String.fromCharCode(65+item.answer)+"."}
+              {item.explanation?" "+item.explanation:""}
+              {item.sourceIds.length?" Sources: "+item.sourceIds.map(id=>"["+id+"]").join(" "):""}
+            </p>:null}
+          </fieldset>)}
+          {submittedQuiz[index]?<p role="status" className="font-semibold">Practice score: {message.practiceQuestions.filter((q,i)=>quizAnswers[index]?.[i]===q.answer).length}/{message.practiceQuestions.length}</p>:
+            <button type="button" className="btn-primary" disabled={Object.keys(quizAnswers[index]??{}).length!==message.practiceQuestions.length}
+              onClick={()=>setSubmittedQuiz(current=>({...current,[index]:true}))}>Check answers</button>}
+        </section> : message.role==="assistant"?<AIMarkdown value={message.content}/>:<p className="whitespace-pre-wrap break-words">{message.content}</p>}
         {message.sources?.length ? <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--line)] pt-3" aria-label="Referenced course sources">
           {message.sources.map((source) => <Link key={source.id} href={source.href} className="rounded-full border border-[var(--line)] px-2 py-1 text-[10px] font-semibold hover:text-[var(--green)]" title={source.type + ": " + source.title}>[{source.id}] {source.title}</Link>)}
         </div> : null}
