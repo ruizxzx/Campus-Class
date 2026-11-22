@@ -73,9 +73,32 @@ export function LibraryUploadForm({classes,replaceMaterialId}:{
        }))})});
      const data=await response.json().catch(()=>({}));
      if(!response.ok)throw new Error(data.error??"Files uploaded but not yet published. Retry to finalize.");
+     const toIndex=current.items.flatMap((item,index)=>{
+       const extension=current.files[index].name.slice(current.files[index].name.lastIndexOf(".")).toLowerCase();
+       return extension===".pdf"||extension===".txt"?[{item,name:current.files[index].name}]:[];
+     });
      pending.current=null;setHasPending(false);setFiles([]);
      toast.success(replaceMaterialId?"File version updated.":"All library files published.");
      router.refresh();
+     // Extract immediately using the authenticated faculty session. SQL 055
+     // independently queues durable retries when the browser disconnects.
+     if(toIndex.length){
+       toast.message("Extracting AI text for "+toIndex.length+" PDF/TXT file(s).");
+       void Promise.allSettled(toIndex.map(async ({item,name})=>{
+         const res=await fetch("/api/library/ai",{method:"POST",
+           headers:{"Content-Type":"application/json"},
+           body:JSON.stringify({action:"index",material_id:item.material_id,use_ocr:false}),
+           signal:AbortSignal.timeout(70000)});
+         const result=await res.json().catch(()=>({}));
+         if(!res.ok)throw new Error(name+": "+(result.error??"extraction failed"));
+         return name;
+       })).then(results=>{
+         const failed=results.filter((r):r is PromiseRejectedResult=>r.status==="rejected");
+         if(failed.length)toast.error(failed.length+" file(s) could not be indexed immediately. Faculty can retry; queued retries run after SQL 055 is applied.");
+         else toast.success("AI text extraction completed for "+toIndex.length+" file(s).");
+         router.refresh();
+       });
+     }
    }catch(error){
      toast.error(error instanceof Error?error.message:"Upload failed. Retry with the same selected files.");
    }finally{setBusy(false);}
