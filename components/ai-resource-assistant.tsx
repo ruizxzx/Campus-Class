@@ -1,12 +1,14 @@
 "use client";
 import {AIMarkdown} from "@/components/ai-markdown";
+import Link from "next/link";
 
 import { useEffect, useState } from "react";
 import { ArrowUp, BrainCircuit, ChevronDown, ChevronUp, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
 type ResourceType = "post" | "course" | "lesson" | "syllabus";
-type Message = { role: "user" | "assistant"; content: string };
+type Reference = {id:string;type:string;title:string;href:string};
+type Message = { role: "user" | "assistant"; content: string; sources?:Reference[] };
 
 export function AIResourceAssistant({
   resourceType,
@@ -55,13 +57,13 @@ export function AIResourceAssistant({
           history: messages.slice(-8).map(({ role, content }) => ({ role, content: content.trim().slice(0, 2500) })),
         }),
       });
-      const result: { answer?: unknown; error?: unknown } | null = await response.json().catch(() => null);
+      const result: { answer?: unknown; error?: unknown; sources?: Reference[] } | null = await response.json().catch(() => null);
       if (!response.ok) {
         throw new Error(typeof result?.error === "string" ? result.error : `Could not get an AI answer (HTTP ${response.status}).`);
       }
       const answer = result?.answer;
       if (typeof answer !== "string" || !answer.trim()) throw new Error("The AI returned no answer. Please retry.");
-      setMessages((current) => [...current, { role: "assistant", content: answer }]);
+      setMessages((current) => [...current, { role: "assistant", content: answer, sources: Array.isArray(result?.sources)?result.sources:[] }]);
     } catch (error) {
       setMessages((current) => current.slice(0, -1));
       setQuestion(text);
@@ -100,7 +102,11 @@ export function AIResourceAssistant({
                   {messages.map((message, index) => (
                     <div key={`${message.role}-${index}`} className={`max-w-[88%] rounded-xl px-3 py-2.5 text-xs leading-5 ${message.role === "user" ? "ml-auto bg-[var(--green-soft)]" : "mr-auto bg-[var(--surface-2)]"}`}>
                       <div className="mb-1 text-[9px] font-bold uppercase tracking-[.1em] text-[var(--muted)]">{message.role === "user" ? "You" : "CampusClass AI"}</div>
-                      {message.role==="assistant"?<AIMarkdown value={message.content}/>:<p className="whitespace-pre-wrap break-words">{message.content}</p>}
+                      {message.role==="assistant"?<><AIMarkdown value={message.content}/>{message.sources?.length?<div className="mt-2 flex flex-wrap gap-2 border-t border-[var(--line)] pt-2">
+                        {message.sources.map(source=><Link key={source.id} href={source.href}
+                          className="rounded-lg border border-[var(--line)] px-2 py-1 text-[10px] hover:text-[var(--green)]"
+                          title={source.type}>{ "["+source.id+"] "+source.title }</Link>)}
+                      </div>:null}</>:<p className="whitespace-pre-wrap break-words">{message.content}</p>}
                     </div>
                   ))}
                 </div> : <div className="rounded-xl bg-[var(--surface-2)] px-4 py-5 text-center"><Sparkles size={18} className="mx-auto text-[var(--green-strong)]"/><p className="mt-2 text-xs font-semibold">What would you like to understand?</p><p className="mt-1 text-[10px] leading-5 text-[var(--muted)]">Ask for a summary, explanation, key ideas or a study question.</p></div>}
@@ -128,7 +134,11 @@ export function AIResourceAssistant({
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className={`max-w-[88%] rounded-xl px-3 py-2.5 text-xs leading-5 ${message.role === "user" ? "ml-auto bg-[var(--green-soft)]" : "mr-auto bg-[var(--surface-2)]"}`}>
                   <div className="mb-1 text-[9px] font-bold uppercase tracking-[.1em] text-[var(--muted)]">{message.role === "user" ? "You" : "CampusClass AI"}</div>
-                  {message.role==="assistant"?<AIMarkdown value={message.content}/>:<p className="whitespace-pre-wrap break-words">{message.content}</p>}
+                  {message.role==="assistant"?<><AIMarkdown value={message.content}/>{message.sources?.length?<div className="mt-2 flex flex-wrap gap-2 border-t border-[var(--line)] pt-2">
+                        {message.sources.map(source=><Link key={source.id} href={source.href}
+                          className="rounded-lg border border-[var(--line)] px-2 py-1 text-[10px] hover:text-[var(--green)]"
+                          title={source.type}>{ "["+source.id+"] "+source.title }</Link>)}
+                      </div>:null}</>:<p className="whitespace-pre-wrap break-words">{message.content}</p>}
                 </div>
               ))}
             </div> : null}
