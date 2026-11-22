@@ -8,10 +8,11 @@ import { StudyLibraryAI } from "@/components/study-library-ai";
 import { LibraryUploadForm } from "@/components/study-library-upload";
 type Version={id:string;version:number;file_name:string;mime_type:string;indexed_at:string|null;created_at:string};
 type BookmarkRow={page_number:number;note:string};
-export function StudyLibraryReader({materialId,version,isStaff,versions,initialPage,initialCompleted,initialBookmarks}:{
+export function StudyLibraryReader({materialId,version,isStaff,versions,indexStatus,indexError,initialPage,initialCompleted,initialBookmarks}:{
  materialId:string;
  version:{id:string;file_name:string;mime_type:string;indexed_at:string|null};
- isStaff:boolean;versions:Version[];initialPage:number;initialCompleted:boolean;initialBookmarks:BookmarkRow[];
+ isStaff:boolean;versions:Version[];indexStatus:string|null;indexError:string|null;
+ initialPage:number;initialCompleted:boolean;initialBookmarks:BookmarkRow[];
 }) {
  const router=useRouter();
  const [page,setPage]=useState(initialPage);
@@ -108,6 +109,7 @@ export function StudyLibraryReader({materialId,version,isStaff,versions,initialP
      </div>
    </section>:null}
    <StudyLibraryAI materialId={materialId} indexed={Boolean(version.indexed_at)} staff={isStaff}
+     indexStatus={indexStatus} indexError={indexError}
      isPdf={isPdf||version.mime_type==="text/plain"}/>
  </div>;
 }

@@ -1,10 +1,12 @@
-import { requireRole } from "@/lib/auth";
+import { requireProfile } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { LocalizedPageHeader as PageHeader } from "@/components/localized-page-header";
 import { AIStudyAssistant } from "@/components/ai-study-assistant";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AIStudyPage() {
-  const profile = await requireRole(["student"]);
+  const profile = await requireProfile();
+  if(profile.role!=="student")redirect("/dashboard?copilot=students-only");
   const db = await createClient();
   const { data: memberships, error: membershipError } = await db.from("class_enrollments")
     .select("class_id").eq("college_id", profile.college_id).eq("student_id",profile.id).eq("status","active");
