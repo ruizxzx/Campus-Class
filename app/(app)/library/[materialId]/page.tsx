@@ -29,6 +29,10 @@ export default async function LibraryMaterialPage({params}:{
  if(versionError)throw new Error("Could not load file version history.");
  const version=(versions??[]).find(v=>v.version===material.current_version);
  if(!version)notFound();
+ // SQL 055 is applied manually; older installations may not have the queue yet.
+ const {data:indexJob}=await db.from("study_material_index_jobs")
+   .select("status,error_message").eq("college_id",profile.college_id)
+   .eq("version_id",version.id).maybeSingle();
  const [progressResult,bookmarksResult]=profile.role==="student"
   ?await Promise.all([
     db.from("study_material_progress").select("last_page,status")
@@ -50,6 +54,7 @@ export default async function LibraryMaterialPage({params}:{
    <StudyLibraryReader materialId={material.id}
      version={{id:version.id,file_name:version.file_name,mime_type:version.mime_type,indexed_at:version.indexed_at}}
      isStaff={isStaff} versions={isStaff?versions??[]:[]}
+     indexStatus={indexJob?.status??null} indexError={isStaff?indexJob?.error_message??null:null}
      initialPage={progressResult.data?.last_page??1}
      initialCompleted={progressResult.data?.status==="completed"}
      initialBookmarks={bookmarksResult.data??[]}/>
