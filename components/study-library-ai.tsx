@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { BookOpen, Brain, WandSparkles } from "lucide-react";
 type Card={front:string;back:string};
 type Question={question:string;choices:[string,string,string,string];answer:number;explanation:string};
-export function StudyLibraryAI({materialId,indexed,staff,isPdf}:{
+export function StudyLibraryAI({materialId,indexed,staff,isPdf,indexStatus,indexError}:{
  materialId:string;indexed:boolean;staff:boolean;isPdf:boolean;
+ indexStatus:string|null;indexError:string|null;
 }) {
  const router=useRouter();
  const [busy,setBusy]=useState(false);
@@ -47,7 +48,19 @@ export function StudyLibraryAI({materialId,indexed,staff,isPdf}:{
        Index document text {indexed?"again":""}
      </button>
    </div>:null}
-   {!indexed?<p className="text-sm text-[var(--muted)]">This document is not indexed yet. Ask a faculty member to extract it before using AI study tools.</p>:<>
+   {!indexed?<div className="space-y-2">
+     <p className="text-sm text-[var(--muted)]">
+       {["pending","processing","retry"].includes(indexStatus??"")
+         ? "This document is queued for verified text extraction. AI tools unlock only after indexing succeeds."
+         : indexStatus==="failed"
+           ? "Verified text extraction failed. AI tools remain disabled until faculty retries."
+           : isPdf ? "This document is not indexed yet. Faculty can extract its text before AI tools become available."
+             : "This file type does not support verified AI text extraction. Download it to read."}
+     </p>
+     {staff&&indexError?<p role="alert" className="text-xs text-amber-700">
+       Extraction detail: {indexError} Try indexing again; scanned PDFs may need the OCR option.
+     </p>:null}
+   </div>:<>
      <input aria-label="Study focus" className="input-base w-full" maxLength={250} value={focus}
        onChange={e=>setFocus(e.target.value)} placeholder="Optional focus: e.g. sorting algorithms, Unit 2"/>
      <div className="flex flex-wrap gap-2">
