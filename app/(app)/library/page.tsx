@@ -67,6 +67,35 @@ export default async function StudyLibraryPage({searchParams}:{
      [item.title,item.description,item.unit_title,item.chapter_title].some(v=>v.toLowerCase().includes(normalized))||
      matchingText.has(item.id));
  }
+ // Only the current version can advertise AI readiness. Never treat PDF
+ // preview/download availability as evidence of an extracted text index.
+ const indexStates=new Map<string,{id:string;indexed_at:string|null;mime_type:string;
+   status?:string;error_message?:string|null}>();
+ for(let offset=0;offset<items.length;offset+=75){
+   const batch=items.slice(offset,offset+75);
+   const expected=new Map(batch.map(item=>[item.id,item.current_version]));
+   const {data:versions,error}=await db.from("study_material_versions")
+     .select("id,material_id,version,indexed_at,mime_type")
+     .eq("college_id",profile.college_id).in("material_id",batch.map(item=>item.id));
+   if(error)throw new Error("Could not load library indexing status.");
+   const current=(versions??[]).filter(v=>expected.get(v.material_id)===v.version);
+   const jobIds=current.map(v=>v.id);
+   const jobStates=new Map<string,{status:string;error_message:string|null}>();
+   if(jobIds.length){
+     // Before forward SQL 055 is manually applied, this table does not exist.
+     const {data:jobs}=await db.from("study_material_index_jobs")
+       .select("version_id,status,error_message").eq("college_id",profile.college_id)
+       .in("version_id",jobIds);
+     for(const job of jobs??[])jobStates.set(job.version_id,job);
+   }
+   for(const version of current){
+     const job=jobStates.get(version.id);
+     indexStates.set(version.material_id,{
+       id:version.id,indexed_at:version.indexed_at,mime_type:version.mime_type,
+       status:job?.status,error_message:job?.error_message,
+     });
+   }
+ }
  const names=new Map(classes.map(c=>[c.id,classLabel(c)]));
  return <>
    <LearningHubHeader active="library" title="Digital study library"
@@ -107,7 +136,16 @@ export default async function StudyLibraryPage({searchParams}:{
            {" "+matchingText.get(item.id)?.snippet}</p>:null}
        </div>
        <div className="mt-4 pt-3 border-t border-[var(--line)] text-xs font-semibold text-[var(--green-strong)] flex gap-2 items-center">
-         <BookOpen size={14}/>Open material</div>
+         <BookOpen size={14}/>Open material
+         <span className="ml-auto text-[10px]">
+           {indexStates.get(item.id)?.indexed_at ? "AI ready" :
+             indexStates.get(item.id)?.status==="failed" ? "AI indexing failed" :
+             ["pending","processing","retry"].includes(indexStates.get(item.id)?.status??"") ? "AI indexing queued" :
+             ["application/pdf","text/plain"].includes(indexStates.get(item.id)?.mime_type??"") ? "AI not indexed" :
+             "AI not supported for this file"}
+         </span></div>
+       {isStaff&&indexStates.get(item.id)?.status==="failed"&&indexStates.get(item.id)?.error_message?
+         <p className="mt-2 text-xs text-amber-700">Indexing issue: {indexStates.get(item.id)?.error_message}</p>:null}
      </Link>):<div className="col-span-full"><EmptyState title={query?"No matching study material":"No study resources yet"} description="Faculty can upload a set of PDF books or notes for this class. Index PDFs to enable full-text search."/></div>}
    </section>
    {items.length===500?<p className="mt-4 text-xs text-[var(--muted)]">Showing the 500 most recent materials. Narrow the class or semester to find older files.</p>:null}
